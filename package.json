@@ -1,0 +1,59 @@
+{
+  "name": "@moltbot/dingtalk",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Moltbot DingTalk channel plugin",
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "src",
+    "moltbot.plugin.json"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/adongguo/moltbot-dingtalk.git"
+  },
+  "keywords": [
+    "moltbot",
+    "dingtalk",
+    "钉钉",
+    "chatbot",
+    "ai",
+    "claude"
+  ],
+  "moltbot": {
+    "extensions": [
+      "./index.ts"
+    ],
+    "channel": {
+      "id": "dingtalk",
+      "label": "DingTalk",
+      "selectionLabel": "DingTalk (钉钉)",
+      "docsPath": "/channels/dingtalk",
+      "docsLabel": "dingtalk",
+      "blurb": "钉钉/DingTalk enterprise messaging.",
+      "aliases": [
+        "dingding"
+      ],
+      "order": 70
+    },
+    "install": {
+      "npmSpec": "@moltbot/dingtalk",
+      "localPath": ".",
+      "defaultChoice": "npm"
+    }
+  },
+  "dependencies": {
+    "dingtalk-stream": "^2.1.4",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "clawdbot": "2026.1.24-2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0"
+  },
+  "peerDependencies": {
+    "clawdbot": ">=2026.1.24"
+  }
+}
