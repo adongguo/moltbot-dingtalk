@@ -1,6 +1,6 @@
-# moltbot-dingtalk
+# openclaw-dingtalk
 
-DingTalk (钉钉) channel plugin for [Moltbot](https://github.com/moltbot/moltbot).
+DingTalk (钉钉) channel plugin for [OpenClaw](https://github.com/openclaw/openclaw).
 
 [English](#english) | [中文](#中文)
 
@@ -11,13 +11,13 @@ DingTalk (钉钉) channel plugin for [Moltbot](https://github.com/moltbot/moltbo
 ### Installation
 
 ```bash
-moltbot plugins install @moltbot/dingtalk
+openclaw plugins install @adongguo/openclaw-dingtalk
 ```
 
 Or install via npm:
 
 ```bash
-npm install @moltbot/dingtalk
+npm install @adongguo/openclaw-dingtalk
 ```
 
 ### Configuration
@@ -39,9 +39,9 @@ npm install @moltbot/dingtalk
 4. **Publish Application**: Publish the app (at least to test version) to make the bot available
 
 ```bash
-moltbot config set channels.dingtalk.appKey "dingXXXXXXXX"
-moltbot config set channels.dingtalk.appSecret "your_app_secret"
-moltbot config set channels.dingtalk.enabled true
+openclaw config set channels.dingtalk.appKey "dingXXXXXXXX"
+openclaw config set channels.dingtalk.appSecret "your_app_secret"
+openclaw config set channels.dingtalk.enabled true
 ```
 
 ### Configuration Options
@@ -129,13 +129,13 @@ DingTalk API has rate limits. Streaming updates can easily trigger throttling. W
 ### 安装
 
 ```bash
-moltbot plugins install @moltbot/dingtalk
+openclaw plugins install @adongguo/openclaw-dingtalk
 ```
 
 或通过 npm 安装：
 
 ```bash
-npm install @moltbot/dingtalk
+npm install @adongguo/openclaw-dingtalk
 ```
 
 ### 配置
@@ -157,9 +157,9 @@ npm install @moltbot/dingtalk
 4. **发布应用**：发布应用（至少发布到测试版本）使机器人可用
 
 ```bash
-moltbot config set channels.dingtalk.appKey "dingXXXXXXXX"
-moltbot config set channels.dingtalk.appSecret "your_app_secret"
-moltbot config set channels.dingtalk.enabled true
+openclaw config set channels.dingtalk.appKey "dingXXXXXXXX"
+openclaw config set channels.dingtalk.appSecret "your_app_secret"
+openclaw config set channels.dingtalk.enabled true
 ```
 
 ### 配置选项

@@ -220,3 +220,95 @@ export async function sendMarkdownCardDingTalk(params: {
 
   return sendViaWebhook({ sessionWebhook, message, accessToken });
 }
+
+// ============ Simplified Send Functions (for streaming-handler) ============
+
+/**
+ * Send a text message via sessionWebhook (simplified, no cfg required).
+ */
+export async function sendDingTalkTextMessage(params: {
+  sessionWebhook: string;
+  text: string;
+  atUserId?: string;
+  client?: DWClient;
+}): Promise<DingTalkSendResult> {
+  const { sessionWebhook, text, atUserId, client } = params;
+
+  const message: DingTalkTextMessage = {
+    msgtype: "text",
+    text: { content: text },
+  };
+
+  if (atUserId) {
+    message.at = { atUserIds: [atUserId], isAtAll: false };
+  }
+
+  let accessToken: string | undefined;
+  if (client) {
+    try {
+      accessToken = await client.getAccessToken();
+    } catch {
+      // Proceed without access token
+    }
+  }
+
+  return sendViaWebhook({ sessionWebhook, message, accessToken });
+}
+
+/**
+ * Send a message via sessionWebhook with smart text/markdown selection.
+ */
+export async function sendDingTalkMessage(params: {
+  sessionWebhook: string;
+  text: string;
+  useMarkdown?: boolean;
+  title?: string;
+  atUserId?: string;
+  client?: DWClient;
+}): Promise<DingTalkSendResult> {
+  const { sessionWebhook, text, useMarkdown, title, atUserId, client } = params;
+
+  // Auto-detect markdown
+  const hasMarkdown = /^[#*>-]|[*_`#\[\]]/.test(text) || text.includes("\n");
+  const shouldUseMarkdown = useMarkdown !== false && (useMarkdown || hasMarkdown);
+
+  let accessToken: string | undefined;
+  if (client) {
+    try {
+      accessToken = await client.getAccessToken();
+    } catch {
+      // Proceed without access token
+    }
+  }
+
+  if (shouldUseMarkdown) {
+    const markdownTitle =
+      title || text.split("\n")[0].replace(/^[#*\s\->]+/, "").slice(0, 20) || "Message";
+
+    const message: DingTalkMarkdownMessage = {
+      msgtype: "markdown",
+      markdown: {
+        title: markdownTitle,
+        text: atUserId ? `${text} @${atUserId}` : text,
+      },
+    };
+
+    if (atUserId) {
+      message.at = { atUserIds: [atUserId], isAtAll: false };
+    }
+
+    return sendViaWebhook({ sessionWebhook, message, accessToken });
+  }
+
+  // Plain text
+  const message: DingTalkTextMessage = {
+    msgtype: "text",
+    text: { content: text },
+  };
+
+  if (atUserId) {
+    message.at = { atUserIds: [atUserId], isAtAll: false };
+  }
+
+  return sendViaWebhook({ sessionWebhook, message, accessToken });
+}

@@ -9,6 +9,8 @@ export {
   sendMarkdownDingTalk,
   sendActionCardDingTalk,
   sendViaWebhook,
+  sendDingTalkMessage,
+  sendDingTalkTextMessage,
 } from "./src/send.js";
 export {
   uploadMediaDingTalk,
@@ -16,6 +18,9 @@ export {
   sendImageDingTalk,
   sendFileDingTalk,
   sendMediaDingTalk,
+  buildMediaSystemPrompt,
+  processLocalImages,
+  getOapiAccessToken,
 } from "./src/media.js";
 export { probeDingTalk } from "./src/probe.js";
 export {
@@ -25,6 +30,47 @@ export {
   DingTalkEmoji,
 } from "./src/reactions.js";
 export { dingtalkPlugin } from "./src/channel.js";
+
+// AI Card streaming
+export {
+  createAICard,
+  streamAICard,
+  finishAICard,
+  failAICard,
+  getAccessToken,
+  clearAccessTokenCache,
+  AICardStatus,
+  type AICardInstance,
+  type AICardStatusType,
+} from "./src/ai-card.js";
+
+// Session management
+export {
+  isNewSessionCommand,
+  getSessionKey,
+  clearSession,
+  getSessionInfo,
+  clearAllSessions,
+  getActiveSessionCount,
+  cleanupExpiredSessions,
+  getNewSessionCommands,
+  DEFAULT_SESSION_TIMEOUT,
+  type UserSession,
+} from "./src/session.js";
+
+// Gateway streaming
+export {
+  streamFromGateway,
+  getGatewayCompletion,
+  type GatewayOptions,
+} from "./src/gateway-stream.js";
+
+// Streaming message handler
+export {
+  handleDingTalkStreamingMessage,
+  shouldUseStreamingMode,
+  type StreamingHandlerParams,
+} from "./src/streaming-handler.js";
 
 const plugin = {
   id: "dingtalk",

@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-DingTalk (钉钉) channel plugin for [Moltbot](https://github.com/moltbot/moltbot). Enables send/receive messages through DingTalk's enterprise messaging platform using Stream mode.
+DingTalk (钉钉) channel plugin for [OpenClaw](https://github.com/openclaw/openclaw). Enables send/receive messages through DingTalk's enterprise messaging platform using Stream mode.
 
 ## Development
 
-TypeScript ESM project. No build step - plugin is loaded directly as `.ts` files by Moltbot.
+TypeScript ESM project. No build step - plugin is loaded directly as `.ts` files by OpenClaw.
 
 ```bash
 npm install          # Install dependencies
@@ -52,13 +52,19 @@ No test suite exists yet.
 - `typing.ts` - Stub (DingTalk doesn't support typing indicator)
 - `probe.ts` - Bot health check
 
+**AI Card Streaming (NEW):**
+- `ai-card.ts` - AI Card creation, streaming updates, and completion
+- `session.ts` - Session timeout management with new session commands
+- `gateway-stream.ts` - Gateway SSE streaming client
+- `streaming-handler.ts` - Integrated streaming message handler
+
 ### Message Flow
 
 1. `monitor.ts` starts Stream connection via `DWClient.connect()`
 2. `DWClient.registerCallbackListener(TOPIC_ROBOT, ...)` receives messages
 3. `bot.ts` parses the incoming message JSON
 4. For media messages, `media.ts` downloads content via OpenAPI
-5. Message is dispatched to Moltbot agent via `reply-dispatcher.ts`
+5. Message is dispatched to OpenClaw agent via `reply-dispatcher.ts`
 6. Agent responses flow through `send.ts` using `sessionWebhook` URL
 
 ### Key Configuration Options
@@ -70,6 +76,10 @@ No test suite exists yet.
 | `groupPolicy` | `open` / `allowlist` / `disabled` |
 | `requireMention` | Require @bot in groups (default: true) |
 | `renderMode` | `auto` / `raw` / `card` for message rendering |
+| `aiCardMode` | `enabled` / `disabled` for AI Card streaming |
+| `sessionTimeout` | Session timeout in ms (default: 30 minutes) |
+| `gatewayToken` | Gateway auth token |
+| `gatewayPort` | Gateway port (default: 18789) |
 
 ### DingTalk SDK Usage
 
@@ -78,12 +88,12 @@ Uses `dingtalk-stream` npm package. Key components:
 - `TOPIC_ROBOT` - Topic constant for robot message callbacks
 - `sessionWebhook` - Temporary webhook URL for replying (from incoming message)
 
-### Moltbot Plugin SDK
+### OpenClaw Plugin SDK
 
-This plugin implements the Moltbot channel plugin interface:
+This plugin implements the OpenClaw channel plugin interface:
 - `ChannelPlugin` - Main plugin interface (`channel.ts`)
 - `ChannelOutboundAdapter` - Outbound message handling (`outbound.ts`)
-- `MoltbotPluginApi` - Runtime API for plugin registration
+- `OpenClawPluginApi` - Runtime API for plugin registration
 
 The plugin is registered in `index.ts` via `api.registerChannel()`.
 

@@ -1,8 +1,8 @@
 {
-  "name": "@adongguo/moltbot-dingtalk",
+  "name": "@adongguo/openclaw-dingtalk",
   "version": "0.1.1",
   "type": "module",
-  "description": "Moltbot DingTalk channel plugin",
+  "description": "OpenClaw DingTalk channel plugin",
   "license": "MIT",
   "files": [
     "index.ts",
@@ -11,17 +11,17 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adongguo/moltbot-dingtalk.git"
+    "url": "git+https://github.com/adongguo/openclaw-dingtalk.git"
   },
   "keywords": [
-    "moltbot",
+    "openclaw",
     "dingtalk",
     "钉钉",
     "chatbot",
     "ai",
     "claude"
   ],
-  "moltbot": {
+  "openclaw": {
     "extensions": [
       "./index.ts"
     ],
@@ -38,7 +38,7 @@
       "order": 70
     },
     "install": {
-      "npmSpec": "@adongguo/moltbot-dingtalk",
+      "npmSpec": "@adongguo/openclaw-dingtalk",
       "localPath": ".",
       "defaultChoice": "npm"
     }

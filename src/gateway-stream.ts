@@ -1,7 +1,7 @@
 /**
  * Gateway SSE Streaming for DingTalk
  *
- * Connects to local Moltbot/Clawdbot Gateway for streaming chat completions.
+ * Connects to local OpenClaw/Clawdbot Gateway for streaming chat completions.
  * Implements Server-Sent Events (SSE) client for real-time response streaming.
  */
 

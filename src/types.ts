@@ -134,3 +134,65 @@ export type DingTalkOutboundMessage =
   | DingTalkMarkdownMessage
   | DingTalkActionCardMessage
   | DingTalkLinkMessage;
+
+// ============ AI Card Types ============
+
+/** AI Card instance for streaming responses */
+export type AICardInstance = {
+  cardInstanceId: string;
+  accessToken: string;
+  inputingStarted: boolean;
+};
+
+/** AI Card status values */
+export type AICardStatusType = "1" | "2" | "3" | "4" | "5";
+
+/** AI Card message data for creating cards */
+export type AICardMessageData = {
+  conversationType: "1" | "2";
+  conversationId: string;
+  senderStaffId?: string;
+  senderId?: string;
+};
+
+// ============ Session Types ============
+
+/** User session for conversation persistence */
+export type UserSession = {
+  lastActivity: number;
+  sessionId: string;
+};
+
+// ============ Gateway Types ============
+
+/** Gateway streaming options */
+export type GatewayOptions = {
+  userContent: string;
+  systemPrompts: string[];
+  sessionKey: string;
+  gatewayUrl?: string;
+  gatewayPort?: number;
+  gatewayAuth?: string;
+  log?: {
+    info?: (msg: string) => void;
+    warn?: (msg: string) => void;
+    error?: (msg: string) => void;
+  };
+};
+
+// ============ Streaming Handler Types ============
+
+/** Options for streaming message handler */
+export type StreamingHandlerOptions = {
+  cfg: unknown;
+  accountId: string;
+  data: DingTalkIncomingMessage;
+  sessionWebhook: string;
+  config: DingTalkConfig;
+  client?: unknown;
+  log?: {
+    info?: (msg: string) => void;
+    warn?: (msg: string) => void;
+    error?: (msg: string) => void;
+  };
+};
