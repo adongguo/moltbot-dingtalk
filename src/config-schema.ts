@@ -49,6 +49,9 @@ const ChannelHeartbeatVisibilitySchema = z
   .strict()
   .optional();
 
+// AI Card streaming mode: enabled (default) = use AI Card, disabled = use regular messages
+const AICardModeSchema = z.enum(["enabled", "disabled"]).optional();
+
 export const DingTalkGroupSchema = z
   .object({
     requireMention: z.boolean().optional(),
@@ -89,6 +92,16 @@ export const DingTalkConfigSchema = z
     renderMode: RenderModeSchema, // raw = plain text, card = action card with markdown
     // DingTalk specific options
     cooldownMs: z.number().int().positive().optional(), // Cooldown between messages to avoid rate limiting
+    // AI Card streaming options
+    aiCardMode: AICardModeSchema, // enabled (default) = use AI Card streaming, disabled = regular messages
+    sessionTimeout: z.number().int().positive().optional().default(1800000), // Session timeout in ms (default 30 min)
+    // Gateway integration options
+    gatewayToken: z.string().optional(), // Gateway auth token (Bearer)
+    gatewayPassword: z.string().optional(), // Gateway auth password (alternative to token)
+    gatewayPort: z.number().int().positive().optional().default(18789), // Gateway port
+    // Media options
+    enableMediaUpload: z.boolean().optional().default(true), // Enable image post-processing upload
+    systemPrompt: z.string().optional(), // Custom system prompt
   })
   .strict()
   .superRefine((value, ctx) => {
