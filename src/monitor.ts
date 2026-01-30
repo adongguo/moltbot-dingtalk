@@ -1,5 +1,5 @@
 import { DWClient, TOPIC_ROBOT } from "dingtalk-stream";
-import type { ClawdbotConfig, RuntimeEnv, HistoryEntry } from "clawdbot/plugin-sdk";
+import type { ClawdbotConfig, RuntimeEnv, HistoryEntry } from "openclaw/plugin-sdk";
 import type { DingTalkConfig, DingTalkIncomingMessage } from "./types.js";
 import { createDingTalkClient } from "./client.js";
 import { resolveDingTalkCredentials } from "./accounts.js";

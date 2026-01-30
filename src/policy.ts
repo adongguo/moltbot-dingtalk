@@ -1,4 +1,4 @@
-import type { ChannelGroupContext, GroupToolPolicyConfig } from "clawdbot/plugin-sdk";
+import type { ChannelGroupContext, GroupToolPolicyConfig } from "openclaw/plugin-sdk";
 import type { DingTalkConfig, DingTalkGroupConfig } from "./types.js";
 
 export type DingTalkAllowlistMatch = {

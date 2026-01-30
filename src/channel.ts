@@ -1,5 +1,5 @@
-import type { ChannelPlugin, ClawdbotConfig } from "clawdbot/plugin-sdk";
-import { DEFAULT_ACCOUNT_ID } from "clawdbot/plugin-sdk";
+import type { ChannelPlugin, ClawdbotConfig } from "openclaw/plugin-sdk";
+import { DEFAULT_ACCOUNT_ID } from "openclaw/plugin-sdk";
 import type { ResolvedDingTalkAccount, DingTalkConfig } from "./types.js";
 import { resolveDingTalkAccount, resolveDingTalkCredentials } from "./accounts.js";
 import { dingtalkOutbound } from "./outbound.js";

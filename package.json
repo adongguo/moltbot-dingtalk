@@ -1,5 +1,5 @@
 {
-  "name": "@adongguo/openclaw-dingtalk",
+  "name": "@adongguo/dingtalk",
   "version": "0.1.1",
   "type": "module",
   "description": "OpenClaw DingTalk channel plugin",
@@ -7,7 +7,8 @@
   "files": [
     "index.ts",
     "src",
-    "clawdbot.plugin.json"
+    "clawdbot.plugin.json",
+    "openclaw.plugin.json"
   ],
   "repository": {
     "type": "git",
@@ -38,7 +39,7 @@
       "order": 70
     },
     "install": {
-      "npmSpec": "@adongguo/openclaw-dingtalk",
+      "npmSpec": "@adongguo/dingtalk",
       "localPath": ".",
       "defaultChoice": "npm"
     }

@@ -6,7 +6,7 @@ import {
   type ClawdbotConfig,
   type RuntimeEnv,
   type ReplyPayload,
-} from "clawdbot/plugin-sdk";
+} from "openclaw/plugin-sdk";
 import { getDingTalkRuntime } from "./runtime.js";
 import { sendMessageDingTalk, sendActionCardDingTalk } from "./send.js";
 import type { DingTalkConfig } from "./types.js";

@@ -1,4 +1,4 @@
-import type { ClawdbotConfig } from "clawdbot/plugin-sdk";
+import type { ClawdbotConfig } from "openclaw/plugin-sdk";
 
 // DingTalk doesn't have a native typing indicator API
 // This is a stub implementation that does nothing but maintains interface compatibility

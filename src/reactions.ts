@@ -1,4 +1,4 @@
-import type { ClawdbotConfig } from "clawdbot/plugin-sdk";
+import type { ClawdbotConfig } from "openclaw/plugin-sdk";
 
 // DingTalk doesn't have a message reactions API
 // This module provides stub implementations for interface compatibility

@@ -1,4 +1,4 @@
-import type { ChannelOutboundAdapter } from "clawdbot/plugin-sdk";
+import type { ChannelOutboundAdapter } from "openclaw/plugin-sdk";
 import { getDingTalkRuntime } from "./runtime.js";
 import { sendMessageDingTalk } from "./send.js";
 import { sendMediaDingTalk } from "./media.js";
