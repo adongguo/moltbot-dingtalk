@@ -60,11 +60,13 @@ channels:
     dmPolicy: "pairing"
     # Group policy: "open" | "allowlist" | "disabled"
     groupPolicy: "allowlist"
+    # Require @mention in group chats (default: true)
+    requireMention: true
     # Max media size in MB (default: 30)
     mediaMaxMb: 30
     # Render mode for bot replies: "auto" | "raw" | "card"
     renderMode: "auto"
-    # AI Card streaming mode: "enabled" (default) | "disabled"
+    # AI Card streaming mode: "enabled" | "disabled"
     aiCardMode: "enabled"
     # Session timeout in ms (default: 30 minutes)
     sessionTimeout: 1800000
@@ -99,7 +101,6 @@ channels:
 - **No message editing**: DingTalk doesn't support editing messages via sessionWebhook
 - **No reactions**: Bot API doesn't support message reactions
 - **sessionWebhook expiration**: Reply URLs are temporary and expire
-- **Group @mention required**: Group messages must @mention the bot - this is a DingTalk platform limitation and cannot be changed via plugin configuration
 
 ### FAQ
 
@@ -119,7 +120,7 @@ Check the following:
 
 #### How to clear history / start new conversation
 
-Send `/new` command in the chat.
+Send one of these commands in the chat: `/new`, `/reset`, `/clear`, `新会话`, `重新开始`, or `清空对话`.
 
 #### Why is the output not streaming
 
@@ -187,11 +188,13 @@ channels:
     dmPolicy: "pairing"
     # 群聊策略: "open" | "allowlist" | "disabled"
     groupPolicy: "allowlist"
+    # 群聊是否需要 @机器人 (默认 true)
+    requireMention: true
     # 媒体文件最大大小 (MB, 默认 30)
     mediaMaxMb: 30
     # 回复渲染模式: "auto" | "raw" | "card"
     renderMode: "auto"
-    # AI Card 流式模式: "enabled" (默认) | "disabled"
+    # AI Card 流式模式: "enabled" | "disabled"
     aiCardMode: "enabled"
     # 会话超时时间 (毫秒, 默认 30 分钟)
     sessionTimeout: 1800000
@@ -226,7 +229,6 @@ channels:
 - **不支持消息编辑**：钉钉不支持通过 sessionWebhook 编辑消息
 - **不支持表情回复**：机器人 API 不支持消息表情回复
 - **sessionWebhook 过期**：回复 URL 是临时的，会过期
-- **群聊必须 @机器人**：群聊消息必须 @机器人才会回复，这是钉钉平台限制，无法通过插件配置更改
 
 ### 常见问题
 
@@ -246,7 +248,7 @@ channels:
 
 #### 如何清理历史会话 / 开启新对话
 
-在聊天中发送 `/new` 命令即可开启新对话。
+在聊天中发送以下任一命令：`/new`、`/reset`、`/clear`、`新会话`、`重新开始` 或 `清空对话`。
 
 #### 消息为什么不是流式输出
 
