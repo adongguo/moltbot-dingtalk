@@ -21,6 +21,13 @@ export {
   buildMediaSystemPrompt,
   processLocalImages,
   getOapiAccessToken,
+  // File marker processing
+  extractFileMarkers,
+  processFileMarkers,
+  uploadAndSendFile,
+  type FileMarkerInfo,
+  type ExtractedFileMarker,
+  type ProcessedFileResult,
 } from "./src/media.js";
 export { probeDingTalk } from "./src/probe.js";
 export {
