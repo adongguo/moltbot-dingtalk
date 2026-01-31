@@ -11,13 +11,13 @@ DingTalk (钉钉) channel plugin for [OpenClaw](https://github.com/openclaw/open
 ### Installation
 
 ```bash
-openclaw plugins install @adongguo/openclaw-dingtalk
+openclaw plugins install @adongguo/dingtalk
 ```
 
 Or install via npm:
 
 ```bash
-npm install @adongguo/openclaw-dingtalk
+npm install @adongguo/dingtalk
 ```
 
 ### Configuration
@@ -139,13 +139,13 @@ DingTalk API has rate limits. Streaming updates can easily trigger throttling. W
 ### 安装
 
 ```bash
-openclaw plugins install @adongguo/openclaw-dingtalk
+openclaw plugins install @adongguo/dingtalk
 ```
 
 或通过 npm 安装：
 
 ```bash
-npm install @adongguo/openclaw-dingtalk
+npm install @adongguo/dingtalk
 ```
 
 ### 配置
