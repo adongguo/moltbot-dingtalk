@@ -109,9 +109,7 @@ function parseOutboundTarget(to: string): OutboundTarget {
     return { kind: "group", id: to };
   }
 
-  if (/^\d+$/.test(to)) {
-    return { kind: "user", id: to };
-  }
-
-  return { kind: "webhook", url: to };
+  // Bare ID without prefix: webhook URLs always start with http(s)://,
+  // group conversationIds start with "cid", so anything else is a staffId.
+  return { kind: "user", id: to };
 }
