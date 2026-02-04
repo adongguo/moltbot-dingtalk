@@ -102,7 +102,51 @@ export async function uploadAndSendFile(
 
     log?.info?.(`[DingTalk][Media] Uploading file: ${absPath} as "${finalFileName}"`);
 
-    // Step 1: Get access token
+    // Step 1: Get oapi access token for upload
+    const oapiTokenResp = await fetch(
+      `https://oapi.dingtalk.com/gettoken?appkey=${encodeURIComponent(config.appKey)}&appsecret=${encodeURIComponent(config.appSecret)}`,
+    );
+
+    if (!oapiTokenResp.ok) {
+      log?.error?.(`[DingTalk][Media] Failed to get oapi token: ${oapiTokenResp.status}`);
+      return false;
+    }
+
+    const oapiTokenData = (await oapiTokenResp.json()) as { errcode?: number; access_token?: string };
+    if (oapiTokenData.errcode !== 0 || !oapiTokenData.access_token) {
+      log?.error?.(`[DingTalk][Media] oapi token error: errcode=${oapiTokenData.errcode}`);
+      return false;
+    }
+    const oapiToken = oapiTokenData.access_token;
+
+    // Step 2: Upload file via oapi to get media_id
+    const formData = new FormData();
+    const fileBuffer = await fs.promises.readFile(absPath);
+    const blob = new Blob([fileBuffer]);
+    formData.append("media", blob, finalFileName);
+
+    const uploadResp = await fetch(
+      `https://oapi.dingtalk.com/media/upload?access_token=${oapiToken}&type=file`,
+      { method: "POST", body: formData },
+    );
+
+    if (!uploadResp.ok) {
+      const text = await uploadResp.text();
+      log?.error?.(`[DingTalk][Media] File upload failed: ${uploadResp.status} ${text}`);
+      return false;
+    }
+
+    const uploadData = (await uploadResp.json()) as { errcode?: number; media_id?: string };
+    const mediaId = uploadData.media_id;
+
+    if (!mediaId) {
+      log?.error?.(`[DingTalk][Media] No media_id returned from upload: errcode=${uploadData.errcode}`);
+      return false;
+    }
+
+    log?.info?.(`[DingTalk][Media] File uploaded, mediaId=${mediaId}`);
+
+    // Step 2.5: Get OAuth2 access token for sending via robot API
     const tokenResp = await fetch("https://api.dingtalk.com/v1.0/oauth2/accessToken", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -119,38 +163,6 @@ export async function uploadAndSendFile(
 
     const tokenData = (await tokenResp.json()) as { accessToken: string };
     const accessToken = tokenData.accessToken;
-
-    // Step 2: Upload file to get mediaId
-    const formData = new FormData();
-    const fileBuffer = await fs.promises.readFile(absPath);
-    const blob = new Blob([fileBuffer]);
-    formData.append("file", blob, finalFileName);
-    formData.append("type", "file");
-    formData.append("robotCode", config.robotCode || config.appKey);
-
-    const uploadResp = await fetch("https://api.dingtalk.com/v1.0/robot/messageFiles/upload", {
-      method: "POST",
-      headers: {
-        "x-acs-dingtalk-access-token": accessToken,
-      },
-      body: formData,
-    });
-
-    if (!uploadResp.ok) {
-      const text = await uploadResp.text();
-      log?.error?.(`[DingTalk][Media] File upload failed: ${uploadResp.status} ${text}`);
-      return false;
-    }
-
-    const uploadData = (await uploadResp.json()) as { mediaId?: string };
-    const mediaId = uploadData.mediaId;
-
-    if (!mediaId) {
-      log?.error?.(`[DingTalk][Media] No mediaId returned from upload`);
-      return false;
-    }
-
-    log?.info?.(`[DingTalk][Media] File uploaded, mediaId=${mediaId}`);
 
     // Step 3: Send file message via OpenAPI
     const isGroup = conversationInfo.conversationType === "2";
@@ -600,38 +612,43 @@ export async function uploadMediaDingTalk(params: {
   }
 
   try {
-    const accessToken = await client.getAccessToken();
+    // Get oapi token for media upload
+    const oapiTokenResp = await fetch(
+      `https://oapi.dingtalk.com/gettoken?appkey=${encodeURIComponent(dingtalkCfg.appKey!)}&appsecret=${encodeURIComponent(dingtalkCfg.appSecret!)}`,
+    );
 
-    // DingTalk media upload uses multipart form data
-    // https://api.dingtalk.com/v1.0/robot/messageFiles/upload
+    if (!oapiTokenResp.ok) {
+      throw new Error(`Failed to get oapi token: ${oapiTokenResp.status}`);
+    }
+
+    const oapiTokenData = (await oapiTokenResp.json()) as { errcode?: number; access_token?: string };
+    if (oapiTokenData.errcode !== 0 || !oapiTokenData.access_token) {
+      throw new Error(`oapi token error: errcode=${oapiTokenData.errcode}`);
+    }
+
+    // Upload via oapi media endpoint
     const formData = new FormData();
-    // Convert Buffer to ArrayBuffer for Blob compatibility
     const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength) as ArrayBuffer;
     const blob = new Blob([arrayBuffer], { type: "application/octet-stream" });
-    formData.append("file", blob, fileName);
-    formData.append("type", mediaType);
-    formData.append("robotCode", dingtalkCfg.robotCode || "");
+    formData.append("media", blob, fileName);
 
-    const response = await fetch("https://api.dingtalk.com/v1.0/robot/messageFiles/upload", {
-      method: "POST",
-      headers: {
-        "x-acs-dingtalk-access-token": accessToken,
-      },
-      body: formData,
-    });
+    const response = await fetch(
+      `https://oapi.dingtalk.com/media/upload?access_token=${oapiTokenData.access_token}&type=${mediaType}`,
+      { method: "POST", body: formData },
+    );
 
     if (!response.ok) {
       const text = await response.text();
       throw new Error(`DingTalk media upload failed: ${response.status} ${text}`);
     }
 
-    const result = await response.json() as { mediaId?: string };
+    const result = await response.json() as { errcode?: number; media_id?: string };
 
-    if (!result.mediaId) {
-      throw new Error("DingTalk media upload failed: no mediaId returned");
+    if (!result.media_id) {
+      throw new Error(`DingTalk media upload failed: no media_id returned, errcode=${result.errcode}`);
     }
 
-    return { mediaId: result.mediaId };
+    return { mediaId: result.media_id };
   } catch (err) {
     console.error(`DingTalk media upload error: ${String(err)}`);
     return null;

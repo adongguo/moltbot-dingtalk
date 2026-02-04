@@ -3,7 +3,14 @@ import type { DingTalkConfig } from "./types.js";
 import { getDingTalkRuntime } from "./runtime.js";
 import { sendMessageDingTalk } from "./send.js";
 import { sendMediaDingTalk } from "./media.js";
-import { sendTextViaOpenAPI, sendImageViaOpenAPI, type OpenAPISendTarget } from "./openapi-send.js";
+import {
+  sendTextViaOpenAPI,
+  sendImageViaOpenAPI,
+  sendFileViaOpenAPI,
+  type OpenAPISendTarget,
+} from "./openapi-send.js";
+import fs from "fs";
+import path from "path";
 
 export type OutboundTarget =
   | { kind: "webhook"; url: string }
@@ -69,10 +76,10 @@ export const dingtalkOutbound: ChannelOutboundAdapter = {
 
     if (mediaUrl) {
       try {
-        const result = await sendImageViaOpenAPI({ config: dingtalkCfg, target: openAPITarget, photoURL: mediaUrl });
-        return { channel: "dingtalk", conversationId: "", messageId: result.processQueryKey };
+        const result = await sendMediaViaOpenAPIWithUpload(dingtalkCfg, openAPITarget, mediaUrl);
+        return { channel: "dingtalk", conversationId: "", messageId: result };
       } catch (err) {
-        // Fallback: image upload failed, send URL as link
+        console.error(`[dingtalk] sendMediaViaOpenAPIWithUpload failed:`, err);
         const fallbackText = `📎 ${mediaUrl}`;
         const result = await sendTextViaOpenAPI({ config: dingtalkCfg, target: openAPITarget, content: fallbackText });
         return { channel: "dingtalk", conversationId: "", messageId: result.processQueryKey };
@@ -112,4 +119,71 @@ function parseOutboundTarget(to: string): OutboundTarget {
   // Bare ID without prefix: webhook URLs always start with http(s)://,
   // group conversationIds start with "cid", so anything else is a staffId.
   return { kind: "user", id: to };
+}
+
+function isLocalPath(url: string): boolean {
+  return !url.startsWith("http://") && !url.startsWith("https://");
+}
+
+async function getOapiToken(config: DingTalkConfig): Promise<string> {
+  const response = await fetch(
+    `https://oapi.dingtalk.com/gettoken?appkey=${encodeURIComponent(config.appKey!)}&appsecret=${encodeURIComponent(config.appSecret!)}`,
+  );
+
+  if (!response.ok) {
+    throw new Error(`[dingtalk] Failed to get oapi token: ${response.status}`);
+  }
+
+  const data = (await response.json()) as { errcode?: number; access_token?: string };
+  if (data.errcode !== 0 || !data.access_token) {
+    throw new Error(`[dingtalk] oapi token error: errcode=${data.errcode}`);
+  }
+  return data.access_token;
+}
+
+async function uploadFileToMediaId(
+  config: DingTalkConfig,
+  filePath: string,
+  mediaType: "image" | "file" = "file",
+): Promise<string> {
+  const oapiToken = await getOapiToken(config);
+  const fileBuffer = await fs.promises.readFile(filePath);
+  const fileName = path.basename(filePath);
+
+  const formData = new FormData();
+  const blob = new Blob([fileBuffer]);
+  formData.append("media", blob, fileName);
+
+  const response = await fetch(
+    `https://oapi.dingtalk.com/media/upload?access_token=${oapiToken}&type=${mediaType}`,
+    { method: "POST", body: formData },
+  );
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`[dingtalk] Media upload failed: ${response.status} ${text}`);
+  }
+
+  const data = (await response.json()) as { errcode?: number; media_id?: string };
+  if (!data.media_id) {
+    throw new Error(`[dingtalk] Media upload returned no media_id: errcode=${data.errcode}`);
+  }
+  return data.media_id;
+}
+
+async function sendMediaViaOpenAPIWithUpload(
+  config: DingTalkConfig,
+  target: OpenAPISendTarget,
+  mediaUrl: string,
+): Promise<string> {
+  if (isLocalPath(mediaUrl)) {
+    const mediaId = await uploadFileToMediaId(config, mediaUrl);
+    const fileName = path.basename(mediaUrl);
+    const fileType = path.extname(fileName).slice(1).toLowerCase() || "file";
+    const result = await sendFileViaOpenAPI({ config, target, mediaId, fileName, fileType });
+    return result.processQueryKey;
+  }
+
+  const result = await sendImageViaOpenAPI({ config, target, photoURL: mediaUrl });
+  return result.processQueryKey;
 }
