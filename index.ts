@@ -38,6 +38,20 @@ export {
 } from "./src/reactions.js";
 export { dingtalkPlugin } from "./src/channel.js";
 
+// OpenAPI-based sending (proactive messaging)
+export {
+  sendViaOpenAPI,
+  sendTextViaOpenAPI,
+  sendMarkdownViaOpenAPI,
+  sendImageViaOpenAPI,
+  sendFileViaOpenAPI,
+  sendActionCardViaOpenAPI,
+  type OpenAPISendTarget,
+  type OpenAPIMsgKey,
+  type OpenAPISendRequest,
+  type OpenAPISendResult,
+} from "./src/openapi-send.js";
+
 // AI Card streaming
 export {
   createAICard,

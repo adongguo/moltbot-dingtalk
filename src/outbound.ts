@@ -1,11 +1,14 @@
 import type { ChannelOutboundAdapter } from "openclaw/plugin-sdk";
+import type { DingTalkConfig } from "./types.js";
 import { getDingTalkRuntime } from "./runtime.js";
 import { sendMessageDingTalk } from "./send.js";
 import { sendMediaDingTalk } from "./media.js";
+import { sendTextViaOpenAPI, sendImageViaOpenAPI, type OpenAPISendTarget } from "./openapi-send.js";
 
-// Note: DingTalk outbound adapter has limited functionality
-// because it requires sessionWebhook which is only available during message handling.
-// This adapter is primarily for interface compatibility.
+export type OutboundTarget =
+  | { kind: "webhook"; url: string }
+  | { kind: "user"; id: string }
+  | { kind: "group"; id: string };
 
 export const dingtalkOutbound: ChannelOutboundAdapter = {
   deliveryMode: "direct",
@@ -13,34 +16,102 @@ export const dingtalkOutbound: ChannelOutboundAdapter = {
   chunkerMode: "markdown",
   textChunkLimit: 4000,
   sendText: async ({ cfg, to, text }) => {
-    // Note: DingTalk requires sessionWebhook, which must be provided in the 'to' field
-    // Format: sessionWebhook URL directly
-    const result = await sendMessageDingTalk({ cfg, sessionWebhook: to, text });
-    return { channel: "dingtalk", conversationId: result.conversationId, messageId: result.processQueryKey || "" };
-  },
-  sendMedia: async ({ cfg, to, text, mediaUrl }) => {
-    // Send text first if provided
-    if (text?.trim()) {
-      await sendMessageDingTalk({ cfg, sessionWebhook: to, text });
+    const target = parseOutboundTarget(to);
+
+    if (target.kind === "webhook") {
+      const result = await sendMessageDingTalk({ cfg, sessionWebhook: target.url, text });
+      return { channel: "dingtalk", conversationId: result.conversationId, messageId: result.processQueryKey || "" };
     }
 
-    // Upload and send media if URL provided
+    const dingtalkCfg = cfg.channels?.dingtalk as DingTalkConfig | undefined;
+    if (!dingtalkCfg?.appKey || !dingtalkCfg?.appSecret) {
+      throw new Error("[dingtalk] appKey/appSecret required for proactive send");
+    }
+
+    const openAPITarget: OpenAPISendTarget = { kind: target.kind, id: target.id };
+    const result = await sendTextViaOpenAPI({ config: dingtalkCfg, target: openAPITarget, content: text });
+    return { channel: "dingtalk", conversationId: "", messageId: result.processQueryKey };
+  },
+  sendMedia: async ({ cfg, to, text, mediaUrl }) => {
+    const target = parseOutboundTarget(to);
+
+    if (target.kind === "webhook") {
+      if (text?.trim()) {
+        await sendMessageDingTalk({ cfg, sessionWebhook: target.url, text });
+      }
+
+      if (mediaUrl) {
+        try {
+          const result = await sendMediaDingTalk({ cfg, sessionWebhook: target.url, mediaUrl });
+          return { channel: "dingtalk", conversationId: result.conversationId, messageId: result.processQueryKey || "" };
+        } catch (err) {
+          // Fallback: upload failed, send URL as link
+          const fallbackText = `📎 ${mediaUrl}`;
+          const result = await sendMessageDingTalk({ cfg, sessionWebhook: target.url, text: fallbackText });
+          return { channel: "dingtalk", conversationId: result.conversationId, messageId: result.processQueryKey || "" };
+        }
+      }
+
+      const result = await sendMessageDingTalk({ cfg, sessionWebhook: target.url, text: text ?? "" });
+      return { channel: "dingtalk", conversationId: result.conversationId, messageId: result.processQueryKey || "" };
+    }
+
+    const dingtalkCfg = cfg.channels?.dingtalk as DingTalkConfig | undefined;
+    if (!dingtalkCfg?.appKey || !dingtalkCfg?.appSecret) {
+      throw new Error("[dingtalk] appKey/appSecret required for proactive send");
+    }
+
+    const openAPITarget: OpenAPISendTarget = { kind: target.kind, id: target.id };
+
+    if (text?.trim()) {
+      await sendTextViaOpenAPI({ config: dingtalkCfg, target: openAPITarget, content: text });
+    }
+
     if (mediaUrl) {
       try {
-        const result = await sendMediaDingTalk({ cfg, sessionWebhook: to, mediaUrl });
-        return { channel: "dingtalk", conversationId: result.conversationId, messageId: result.processQueryKey || "" };
+        const result = await sendImageViaOpenAPI({ config: dingtalkCfg, target: openAPITarget, photoURL: mediaUrl });
+        return { channel: "dingtalk", conversationId: "", messageId: result.processQueryKey };
       } catch (err) {
-        // Log the error for debugging
-        console.error(`[dingtalk] sendMediaDingTalk failed:`, err);
-        // Fallback to URL link if upload fails
+        // Fallback: image upload failed, send URL as link
         const fallbackText = `📎 ${mediaUrl}`;
-        const result = await sendMessageDingTalk({ cfg, sessionWebhook: to, text: fallbackText });
-        return { channel: "dingtalk", conversationId: result.conversationId, messageId: result.processQueryKey || "" };
+        const result = await sendTextViaOpenAPI({ config: dingtalkCfg, target: openAPITarget, content: fallbackText });
+        return { channel: "dingtalk", conversationId: "", messageId: result.processQueryKey };
       }
     }
 
-    // No media URL, just return text result
-    const result = await sendMessageDingTalk({ cfg, sessionWebhook: to, text: text ?? "" });
-    return { channel: "dingtalk", conversationId: result.conversationId, messageId: result.processQueryKey || "" };
+    if (!text?.trim()) {
+      const result = await sendTextViaOpenAPI({ config: dingtalkCfg, target: openAPITarget, content: text ?? "" });
+      return { channel: "dingtalk", conversationId: "", messageId: result.processQueryKey };
+    }
+
+    return { channel: "dingtalk", conversationId: "", messageId: "" };
   },
 };
+
+// ============ Private Helpers ============
+
+function parseOutboundTarget(to: string): OutboundTarget {
+  if (to.startsWith("https://") || to.startsWith("http://")) {
+    return { kind: "webhook", url: to };
+  }
+
+  const userMatch = to.match(/^(?:user|staff):(.+)$/i);
+  if (userMatch) {
+    return { kind: "user", id: userMatch[1] };
+  }
+
+  const groupMatch = to.match(/^(?:group|chat):(.+)$/i);
+  if (groupMatch) {
+    return { kind: "group", id: groupMatch[1] };
+  }
+
+  if (to.startsWith("cid")) {
+    return { kind: "group", id: to };
+  }
+
+  if (/^\d+$/.test(to)) {
+    return { kind: "user", id: to };
+  }
+
+  return { kind: "webhook", url: to };
+}
