@@ -4,6 +4,7 @@ import type { DingTalkConfig, DingTalkIncomingMessage } from "./types.js";
 import { createDingTalkClient } from "./client.js";
 import { resolveDingTalkCredentials } from "./accounts.js";
 import { handleDingTalkMessage } from "./bot.js";
+import { cleanupExpiredSessions, DEFAULT_SESSION_TIMEOUT } from "./session.js";
 
 export type MonitorDingTalkOpts = {
   config?: ClawdbotConfig;
@@ -13,6 +14,7 @@ export type MonitorDingTalkOpts = {
 };
 
 let currentClient: DWClient | null = null;
+let cleanupIntervalId: ReturnType<typeof setInterval> | null = null;
 
 export async function monitorDingTalkProvider(opts: MonitorDingTalkOpts = {}): Promise<void> {
   const cfg = opts.config;
@@ -56,6 +58,10 @@ async function monitorStream(params: {
 
   return new Promise((resolve, reject) => {
     const cleanup = () => {
+      if (cleanupIntervalId) {
+        clearInterval(cleanupIntervalId);
+        cleanupIntervalId = null;
+      }
       if (currentClient === client) {
         try {
           client.disconnect();
@@ -113,6 +119,15 @@ async function monitorStream(params: {
       // Connect to DingTalk Stream
       client.connect();
       log("dingtalk: Stream client connected");
+
+      // Periodic cleanup of expired sessions (every 5 minutes)
+      const sessionTimeout = dingtalkCfg.sessionTimeout ?? DEFAULT_SESSION_TIMEOUT;
+      cleanupIntervalId = setInterval(() => {
+        const cleaned = cleanupExpiredSessions(sessionTimeout);
+        if (cleaned > 0) {
+          log(`dingtalk: cleaned up ${cleaned} expired sessions`);
+        }
+      }, 300_000);
     } catch (err) {
       cleanup();
       abortSignal?.removeEventListener("abort", handleAbort);
@@ -122,6 +137,10 @@ async function monitorStream(params: {
 }
 
 export function stopDingTalkMonitor(): void {
+  if (cleanupIntervalId) {
+    clearInterval(cleanupIntervalId);
+    cleanupIntervalId = null;
+  }
   if (currentClient) {
     try {
       currentClient.disconnect();

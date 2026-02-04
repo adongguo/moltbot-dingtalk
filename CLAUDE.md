@@ -79,6 +79,7 @@ No test suite exists yet.
 | `sessionTimeout` | Session timeout in ms (default: 30 minutes) |
 | `gatewayToken` | Gateway auth token |
 | `gatewayPort` | Gateway port (default: 18789) |
+| `groupSessionScope` | `per-group` (default) or `per-user` for group session isolation |
 
 ### DingTalk SDK Usage
 
@@ -123,6 +124,23 @@ Processing flow:
 - `processFileMarkers()` - Extracts file markers, uploads and sends files
 - `extractFileMarkers()` - Parses `[DINGTALK_FILE]...[/DINGTALK_FILE]` markers
 - `uploadAndSendFile()` - Uploads file and sends via OpenAPI
+
+### Session Isolation
+
+**DM chats**: Isolated per user by `senderStaffId`. Each user gets their own agent session key: `agent:<agentId>:dingtalk:dm:<senderId>`.
+
+**Group chats**: By default (`groupSessionScope: "per-group"`), all users in a group share one session keyed by `conversationId`. Set `groupSessionScope: "per-user"` for per-user isolation using `<conversationId>:<senderId>` as the peer ID.
+
+**Streaming path** (AI Card mode): Sessions are isolated per user via the Gateway `user` field, which resolves to `agent:<agentId>:openai-user:dingtalk:<senderId>`.
+
+**Session timeout**: Defaults to 30 minutes (`sessionTimeout`). Expired sessions are cleaned up automatically every 5 minutes by the monitor.
+
+**Fallback behavior**: If `senderStaffId` is unavailable, the system falls back to `senderCorpId`, then `conversationId` with a warning log.
+
+| Option | Values | Default | Description |
+|--------|--------|---------|-------------|
+| `groupSessionScope` | `per-group` / `per-user` | `per-group` | Session isolation in group chats |
+| `sessionTimeout` | number (ms) | `1800000` (30 min) | Session inactivity timeout |
 
 ### DingTalk API Limitations
 

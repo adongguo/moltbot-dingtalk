@@ -121,6 +121,20 @@ export async function handleDingTalkStreamingMessage(params: StreamingHandlerPar
   const senderId = data.senderStaffId || data.conversationId;
   const senderName = data.senderNick || "Unknown";
 
+  if (!data.senderStaffId) {
+    log?.warn?.(
+      `[DingTalk][Streaming] No senderStaffId for message, falling back to conversationId for session isolation`,
+    );
+  }
+
+  // Apply groupSessionScope for consistent isolation with bot.ts path
+  const groupSessionScope = config.groupSessionScope ?? "per-group";
+  const sessionIdentifier = isDirect
+    ? senderId
+    : groupSessionScope === "per-user"
+      ? `${data.conversationId}:${senderId}`
+      : data.conversationId;
+
   log?.info?.(`[DingTalk][Streaming] Message from ${senderName}: "${content.text.slice(0, 50)}..."`);
 
   // ===== Session Management =====
@@ -129,7 +143,7 @@ export async function handleDingTalkStreamingMessage(params: StreamingHandlerPar
 
   // Handle new session command
   if (forceNewSession) {
-    const { sessionKey } = getSessionKey(senderId, true, sessionTimeout, log);
+    const { sessionKey } = getSessionKey(sessionIdentifier, true, sessionTimeout, log);
     await sendDingTalkMessage({
       sessionWebhook,
       text: "✨ 已开启新会话，之前的对话已清空。",
@@ -137,12 +151,12 @@ export async function handleDingTalkStreamingMessage(params: StreamingHandlerPar
       atUserId: !isDirect ? senderId : undefined,
       client,
     });
-    log?.info?.(`[DingTalk][Streaming] New session requested: ${senderId}, key=${sessionKey}`);
+    log?.info?.(`[DingTalk][Streaming] New session requested: ${sessionIdentifier}, key=${sessionKey}`);
     return;
   }
 
   // Get or create session
-  const { sessionKey, isNew } = getSessionKey(senderId, false, sessionTimeout, log);
+  const { sessionKey, isNew } = getSessionKey(sessionIdentifier, false, sessionTimeout, log);
   log?.info?.(`[DingTalk][Session] key=${sessionKey}, isNew=${isNew}`);
 
   // ===== Build System Prompts =====

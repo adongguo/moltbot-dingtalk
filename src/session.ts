@@ -85,8 +85,8 @@ export function getSessionKey(
       );
       return { sessionKey: sessionId, isNew: true };
     }
-    // Update activity time
-    existing.lastActivity = now;
+    // Update activity time (immutable)
+    userSessions.set(senderId, { ...existing, lastActivity: now });
     return { sessionKey: existing.sessionId, isNew: false };
   }
 

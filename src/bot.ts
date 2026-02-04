@@ -264,12 +264,18 @@ export async function handleDingTalkMessage(params: {
     const dingtalkFrom = isGroup ? `dingtalk:group:${ctx.conversationId}` : `dingtalk:${ctx.senderId}`;
     const dingtalkTo = isGroup ? `chat:${ctx.conversationId}` : `user:${ctx.senderId}`;
 
+    const groupSessionScope = dingtalkCfg?.groupSessionScope ?? "per-group";
+    const groupPeerId =
+      groupSessionScope === "per-user"
+        ? `${ctx.conversationId}:${ctx.senderId}`
+        : ctx.conversationId;
+
     const route = core.channel.routing.resolveAgentRoute({
       cfg,
       channel: "dingtalk",
       peer: {
         kind: isGroup ? "group" : "dm",
-        id: isGroup ? ctx.conversationId : ctx.senderId,
+        id: isGroup ? groupPeerId : ctx.senderId,
       },
     });
 

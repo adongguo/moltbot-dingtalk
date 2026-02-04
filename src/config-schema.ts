@@ -52,6 +52,9 @@ const ChannelHeartbeatVisibilitySchema = z
 // AI Card streaming mode: enabled (default) = use AI Card, disabled = use regular messages
 const AICardModeSchema = z.enum(["enabled", "disabled"]).optional();
 
+// Group session scope: per-group (default) = shared session per group, per-user = isolated session per user in group
+const GroupSessionScopeSchema = z.enum(["per-group", "per-user"]).optional();
+
 export const DingTalkGroupSchema = z
   .object({
     tools: ToolPolicySchema,
@@ -90,6 +93,7 @@ export const DingTalkConfigSchema = z
     renderMode: RenderModeSchema, // raw = plain text, card = action card with markdown
     // DingTalk specific options
     cooldownMs: z.number().int().positive().optional(), // Cooldown between messages to avoid rate limiting
+    groupSessionScope: GroupSessionScopeSchema, // per-group (default) = shared, per-user = isolated per user in groups
     // AI Card streaming options
     aiCardMode: AICardModeSchema, // enabled (default) = use AI Card streaming, disabled = regular messages
     sessionTimeout: z.number().int().positive().optional().default(1800000), // Session timeout in ms (default 30 min)
