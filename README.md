@@ -14,11 +14,14 @@ DingTalk (钉钉) channel plugin for [OpenClaw](https://github.com/openclaw/open
 openclaw plugins install @adongguo/dingtalk
 ```
 
-Or install via npm:
-
-```bash
-npm install @adongguo/dingtalk
-```
+> **Note:** `npm install @adongguo/dingtalk` alone is **not enough** — OpenClaw does not auto-discover plugins from `node_modules`. You must use `openclaw plugins install` as shown above, or manually add the plugin path to your config:
+>
+> ```yaml
+> plugins:
+>   load:
+>     paths:
+>       - "./node_modules/@adongguo/dingtalk"
+> ```
 
 ### Configuration
 
@@ -60,8 +63,8 @@ channels:
     dmPolicy: "pairing"
     # Group policy: "open" | "allowlist" | "disabled"
     groupPolicy: "allowlist"
-    # Require @mention in groups
-    requireMention: true
+    # Group session scope: "per-group" | "per-user"
+    groupSessionScope: "per-group"
     # Max media size in MB (default: 30)
     mediaMaxMb: 30
     # Render mode for bot replies: "auto" | "raw" | "card"
@@ -143,11 +146,14 @@ DingTalk API has rate limits. Streaming updates can easily trigger throttling. W
 openclaw plugins install @adongguo/dingtalk
 ```
 
-或通过 npm 安装：
-
-```bash
-npm install @adongguo/dingtalk
-```
+> **注意：** 仅 `npm install @adongguo/dingtalk` 是**不够的** — OpenClaw 不会自动从 `node_modules` 发现插件。请使用上面的 `openclaw plugins install` 命令，或在配置文件中手动添加插件路径：
+>
+> ```yaml
+> plugins:
+>   load:
+>     paths:
+>       - "./node_modules/@adongguo/dingtalk"
+> ```
 
 ### 配置
 
@@ -189,8 +195,8 @@ channels:
     dmPolicy: "pairing"
     # 群聊策略: "open" | "allowlist" | "disabled"
     groupPolicy: "allowlist"
-    # 群聊是否需要 @机器人
-    requireMention: true
+    # 群聊会话范围: "per-group" | "per-user"
+    groupSessionScope: "per-group"
     # 媒体文件最大大小 (MB, 默认 30)
     mediaMaxMb: 30
     # 回复渲染模式: "auto" | "raw" | "card"
