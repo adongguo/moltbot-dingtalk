@@ -91,13 +91,17 @@ async function monitorStream(params: {
       client.registerCallbackListener(TOPIC_ROBOT, async (res) => {
         try {
           const messageData = JSON.parse(res.data) as DingTalkIncomingMessage;
-          log(`dingtalk: received message from ${messageData.senderNick}: ${messageData.text?.content || messageData.msgtype}`);
 
-          // Debug: log raw payload for media messages to diagnose downloadCode availability
-          const mediaTypes = ["image", "picture", "file", "voice", "video"];
-          if (mediaTypes.includes(messageData.msgtype)) {
-            log(`dingtalk: raw media message payload: ${res.data}`);
+          // DingTalk nests downloadCode inside `content` for media messages (picture, file, voice, video).
+          // Extract to top level for consistent access by downstream handlers.
+          if (!messageData.downloadCode && messageData.content && typeof messageData.content === "object") {
+            const contentObj = messageData.content as unknown as Record<string, unknown>;
+            if (typeof contentObj.downloadCode === "string") {
+              (messageData as Record<string, unknown>).downloadCode = contentObj.downloadCode;
+            }
           }
+
+          log(`dingtalk: received message from ${messageData.senderNick}: ${messageData.text?.content || messageData.msgtype}`);
 
           await handleDingTalkMessage({
             cfg,

@@ -14,6 +14,9 @@ export interface GatewayOptions {
   gatewayUrl?: string; // Full URL or just hostname/port will be resolved
   gatewayPort?: number;
   gatewayAuth?: string; // token or password, both use Bearer format
+  imageBase64?: string; // Base64-encoded image data for multimodal messages
+  imageContentType?: string; // MIME type of the image (e.g. "image/png")
+  images?: Array<{ base64: string; contentType: string }>; // Multiple images (e.g. from richText)
   log?: {
     info?: (msg: string) => void;
     warn?: (msg: string) => void;
@@ -31,7 +34,7 @@ export interface GatewayOptions {
  * @returns AsyncGenerator yielding content chunks
  */
 export async function* streamFromGateway(options: GatewayOptions): AsyncGenerator<string, void, unknown> {
-  const { userContent, systemPrompts, sessionKey, gatewayUrl, gatewayPort, gatewayAuth, log } = options;
+  const { userContent, systemPrompts, sessionKey, gatewayUrl, gatewayPort, gatewayAuth, imageBase64, imageContentType, images, log } = options;
 
   // Resolve gateway URL
   let url: string;
@@ -43,11 +46,40 @@ export async function* streamFromGateway(options: GatewayOptions): AsyncGenerato
   }
 
   // Build messages
-  const messages: Array<{ role: "system" | "user"; content: string }> = [];
+  type TextPart = { type: "text"; text: string };
+  type ImagePart = { type: "image_url"; image_url: { url: string } };
+  type MessageContent = string | Array<TextPart | ImagePart>;
+  type ChatMessage = { role: "system" | "user"; content: MessageContent };
+
+  const messages: ChatMessage[] = [];
   for (const prompt of systemPrompts) {
     messages.push({ role: "system", content: prompt });
   }
-  messages.push({ role: "user", content: userContent });
+
+  // Build user message: multimodal if image(s) present, plain text otherwise
+  const allImages: Array<{ base64: string; contentType: string }> = [];
+  if (images && images.length > 0) {
+    allImages.push(...images);
+  } else if (imageBase64 && imageContentType) {
+    allImages.push({ base64: imageBase64, contentType: imageContentType });
+  }
+
+  if (allImages.length > 0) {
+    const parts: Array<TextPart | ImagePart> = [];
+    if (userContent) {
+      parts.push({ type: "text", text: userContent });
+    }
+    for (const img of allImages) {
+      parts.push({
+        type: "image_url",
+        image_url: { url: `data:${img.contentType};base64,${img.base64}` },
+      });
+    }
+    messages.push({ role: "user", content: parts });
+    log?.info?.(`[DingTalk][Gateway] Sending multimodal message with ${allImages.length} image(s)`);
+  } else {
+    messages.push({ role: "user", content: userContent });
+  }
 
   // Build headers
   const headers: Record<string, string> = {

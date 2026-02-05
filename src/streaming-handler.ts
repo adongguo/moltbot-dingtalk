@@ -10,8 +10,9 @@ import type { DingTalkConfig, DingTalkIncomingMessage } from "./types.js";
 import { createAICard, streamAICard, finishAICard, failAICard } from "./ai-card.js";
 import { isNewSessionCommand, getSessionKey, DEFAULT_SESSION_TIMEOUT } from "./session.js";
 import { streamFromGateway } from "./gateway-stream.js";
-import { buildMediaSystemPrompt, processLocalImages, processFileMarkers, getOapiAccessToken } from "./media.js";
+import { buildMediaSystemPrompt, processLocalImages, processFileMarkers, getOapiAccessToken, downloadMediaDingTalk } from "./media.js";
 import { sendDingTalkMessage, sendDingTalkTextMessage } from "./send.js";
+import { safeParseRichText, extractRichTextContent, extractRichTextDownloadCodes } from "./richtext.js";
 
 // ============ Types ============
 
@@ -32,64 +33,8 @@ export interface StreamingHandlerParams {
 interface ExtractedContent {
   text: string;
   messageType: string;
-}
-
-// ============ Message Content Extraction ============
-
-/**
- * Extract text content from incoming message.
- */
-function extractMessageContent(data: DingTalkIncomingMessage): ExtractedContent {
-  const msgtype = data.msgtype || "text";
-
-  switch (msgtype) {
-    case "text":
-      return { text: data.text?.content?.trim() || "", messageType: "text" };
-    case "richText": {
-      // Parse richText if available
-      if (data.content) {
-        try {
-          const parsed = JSON.parse(data.content);
-          const parts = extractRichTextParts(parsed);
-          return { text: parts || "[富文本消息]", messageType: "richText" };
-        } catch {
-          return { text: data.content || "[富文本消息]", messageType: "richText" };
-        }
-      }
-      return { text: "[富文本消息]", messageType: "richText" };
-    }
-    case "picture":
-    case "image":
-      return { text: "[图片]", messageType: "picture" };
-    case "voice":
-      return { text: "[语音消息]", messageType: "voice" };
-    case "file":
-      return { text: "[文件]", messageType: "file" };
-    default:
-      return { text: data.text?.content?.trim() || `[${msgtype}消息]`, messageType: msgtype };
-  }
-}
-
-/**
- * Extract text from richText structure.
- */
-function extractRichTextParts(richText: unknown): string {
-  if (!richText || typeof richText !== "object") return "";
-  const parts: string[] = [];
-
-  function traverse(node: unknown): void {
-    if (!node || typeof node !== "object") return;
-    if (Array.isArray(node)) {
-      for (const item of node) traverse(item);
-      return;
-    }
-    const obj = node as Record<string, unknown>;
-    if (obj.text && typeof obj.text === "string") parts.push(obj.text);
-    if (obj.content) traverse(obj.content);
-  }
-
-  traverse(richText);
-  return parts.join("").trim();
+  downloadCode?: string;
+  downloadCodes?: string[];
 }
 
 // ============ Main Streaming Handler ============
@@ -112,9 +57,50 @@ export async function handleDingTalkStreamingMessage(params: StreamingHandlerPar
 
   // Extract message content
   const content = extractMessageContent(data);
-  if (!content.text) {
+  if (!content.text && !content.downloadCode && (!content.downloadCodes || content.downloadCodes.length === 0)) {
     log?.info?.(`[DingTalk][Streaming] Empty message, skipping`);
     return;
+  }
+
+  // Download image(s) if present
+  const downloadedImages: Array<{ base64: string; contentType: string }> = [];
+
+  const codesToDownload: string[] = [];
+  if (content.downloadCodes && content.downloadCodes.length > 0) {
+    codesToDownload.push(...content.downloadCodes);
+  } else if (content.downloadCode) {
+    codesToDownload.push(content.downloadCode);
+  }
+
+  if (codesToDownload.length > 0 && client) {
+    const cfgWrapper = { channels: { dingtalk: config } } as Parameters<typeof downloadMediaDingTalk>[0]["cfg"];
+    const maxStreamingImageSize = 10 * 1024 * 1024; // 10MB per image
+
+    for (const code of codesToDownload) {
+      try {
+        const mediaResult = await downloadMediaDingTalk({
+          cfg: cfgWrapper,
+          downloadCode: code,
+          robotCode: data.robotCode || config.robotCode,
+          client,
+        });
+        if (mediaResult) {
+          if (mediaResult.buffer.length > maxStreamingImageSize) {
+            const sizeMB = (mediaResult.buffer.length / 1024 / 1024).toFixed(1);
+            log?.warn?.(`[DingTalk][Streaming] Image too large for streaming (${sizeMB}MB), skipping`);
+          } else {
+            downloadedImages.push({
+              base64: mediaResult.buffer.toString("base64"),
+              contentType: mediaResult.contentType || "image/png",
+            });
+            log?.info?.(`[DingTalk][Streaming] Downloaded image: ${mediaResult.contentType || "image/png"}, ${(mediaResult.buffer.length / 1024).toFixed(1)}KB`);
+          }
+        }
+      } catch (err: unknown) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        log?.warn?.(`[DingTalk][Streaming] Failed to download image: ${errMsg}`);
+      }
+    }
   }
 
   const isDirect = data.conversationType === "1";
@@ -212,6 +198,7 @@ export async function handleDingTalkStreamingMessage(params: StreamingHandlerPar
           sessionKey,
           gatewayAuth,
           gatewayPort: config.gatewayPort,
+          images: downloadedImages.length > 0 ? downloadedImages : undefined,
           log,
         })) {
           accumulated += chunk;
@@ -285,6 +272,7 @@ export async function handleDingTalkStreamingMessage(params: StreamingHandlerPar
       sessionKey,
       gatewayAuth,
       gatewayPort: config.gatewayPort,
+      images: downloadedImages.length > 0 ? downloadedImages : undefined,
       log,
     })) {
       fullResponse += chunk;
@@ -331,6 +319,41 @@ export async function handleDingTalkStreamingMessage(params: StreamingHandlerPar
  * Check if streaming mode should be used based on config.
  */
 export function shouldUseStreamingMode(config: DingTalkConfig): boolean {
-  // Streaming mode requires Gateway integration
   return config.aiCardMode !== "disabled" && (!!config.gatewayToken || !!config.gatewayPassword);
+}
+
+// ============ Private Functions ============
+
+function extractMessageContent(data: DingTalkIncomingMessage): ExtractedContent {
+  const msgtype = data.msgtype || "text";
+
+  switch (msgtype) {
+    case "text":
+      return { text: data.text?.content?.trim() || "", messageType: "text" };
+    case "richText": {
+      if (data.content) {
+        const parsed = safeParseRichText(data.content);
+        if (parsed) {
+          const text = extractRichTextContent(parsed);
+          const codes = extractRichTextDownloadCodes(parsed);
+          return {
+            text,
+            messageType: "richText",
+            downloadCodes: codes.length > 0 ? codes : undefined,
+          };
+        }
+        return { text: typeof data.content === "string" ? data.content : "[富文本消息]", messageType: "richText" };
+      }
+      return { text: "[富文本消息]", messageType: "richText" };
+    }
+    case "picture":
+    case "image":
+      return { text: "用户发送了一张图片", messageType: "picture", downloadCode: data.downloadCode };
+    case "voice":
+      return { text: "[语音消息]", messageType: "voice" };
+    case "file":
+      return { text: "[文件]", messageType: "file" };
+    default:
+      return { text: data.text?.content?.trim() || `[${msgtype}消息]`, messageType: msgtype };
+  }
 }

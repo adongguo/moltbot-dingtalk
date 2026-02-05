@@ -574,8 +574,10 @@ export async function downloadMediaDingTalk(params: {
       throw new Error("DingTalk media download failed: no downloadUrl returned");
     }
 
-    // Download the actual file from the URL
-    const fileResponse = await fetch(result.downloadUrl);
+    // Force HTTPS if the URL is HTTP (some environments block plain HTTP)
+    const fileUrl = result.downloadUrl.replace(/^http:\/\//, "https://");
+
+    const fileResponse = await fetch(fileUrl);
     if (!fileResponse.ok) {
       throw new Error(`Failed to download file from URL: ${fileResponse.status}`);
     }
@@ -584,8 +586,9 @@ export async function downloadMediaDingTalk(params: {
     const contentType = fileResponse.headers.get("content-type") || undefined;
 
     return { buffer, contentType };
-  } catch (err) {
-    console.error(`DingTalk media download error: ${String(err)}`);
+  } catch (err: unknown) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    const cause = err instanceof Error && err.cause ? ` (cause: ${String(err.cause)})` : "";
     return null;
   }
 }
@@ -649,8 +652,7 @@ export async function uploadMediaDingTalk(params: {
     }
 
     return { mediaId: result.media_id };
-  } catch (err) {
-    console.error(`DingTalk media upload error: ${String(err)}`);
+  } catch {
     return null;
   }
 }

@@ -16,167 +16,7 @@ import {
 } from "./policy.js";
 import { createDingTalkReplyDispatcher } from "./reply-dispatcher.js";
 import { downloadMediaDingTalk } from "./media.js";
-
-function parseMessageContent(message: DingTalkIncomingMessage): string {
-  if (message.msgtype === "text" && message.text?.content) {
-    return message.text.content.trim();
-  }
-  if (message.msgtype === "richText" && message.content) {
-    // For richText, try to extract text content
-    try {
-      const parsed = JSON.parse(message.content);
-      return extractRichTextContent(parsed);
-    } catch {
-      return message.content;
-    }
-  }
-  // For other message types, return descriptive text
-  return describeMediaMessage(message);
-}
-
-function extractRichTextContent(richText: unknown): string {
-  if (!richText || typeof richText !== "object") return "";
-  const parts: string[] = [];
-
-  function traverse(node: unknown): void {
-    if (!node || typeof node !== "object") return;
-    if (Array.isArray(node)) {
-      for (const item of node) {
-        traverse(item);
-      }
-      return;
-    }
-    const obj = node as Record<string, unknown>;
-    if (obj.type === "picture") {
-      parts.push("[图片]");
-    } else if (obj.text && typeof obj.text === "string") {
-      parts.push(obj.text);
-    }
-    if (obj.content) {
-      traverse(obj.content);
-    }
-  }
-
-  traverse(richText);
-  return parts.join("").trim() || "[富文本消息]";
-}
-
-function checkBotMentioned(message: DingTalkIncomingMessage): boolean {
-  // In DingTalk, if the bot is mentioned, isInAtList will be true
-  if (message.isInAtList) return true;
-  // Also check atUsers array
-  if (message.atUsers && message.atUsers.length > 0) return true;
-  return false;
-}
-
-function stripBotMention(text: string): string {
-  // DingTalk mentions are typically @bot_name format
-  // The text content usually already has mentions stripped in some cases
-  // But let's clean up any remaining @mentions at the start
-  return text.replace(/^@\S+\s*/g, "").trim();
-}
-
-function inferPlaceholder(msgtype: string): string {
-  switch (msgtype) {
-    case "image":
-    case "picture":
-      return "<media:image>";
-    case "file":
-      return "<media:document>";
-    case "voice":
-      return "<media:audio>";
-    case "video":
-      return "<media:video>";
-    default:
-      return "<media:document>";
-  }
-}
-
-async function resolveDingTalkMediaList(params: {
-  cfg: ClawdbotConfig;
-  message: DingTalkIncomingMessage;
-  maxBytes: number;
-  log?: (msg: string) => void;
-  client?: DWClient;
-}): Promise<DingTalkMediaInfo[]> {
-  const { cfg, message, maxBytes, log, client } = params;
-
-  // Only process media message types
-  const mediaTypes = ["image", "picture", "file", "voice", "video"];
-  if (!mediaTypes.includes(message.msgtype)) {
-    return [];
-  }
-
-  // DingTalk requires downloadCode to download media
-  if (!message.downloadCode) {
-    log?.(`dingtalk: no downloadCode for ${message.msgtype} message`);
-    return [];
-  }
-
-  const out: DingTalkMediaInfo[] = [];
-  const core = getDingTalkRuntime();
-
-  try {
-    const result = await downloadMediaDingTalk({
-      cfg,
-      downloadCode: message.downloadCode,
-      robotCode: message.robotCode,
-      client,
-    });
-
-    if (!result) {
-      log?.(`dingtalk: failed to download ${message.msgtype} media`);
-      return [];
-    }
-
-    let contentType = result.contentType;
-    if (!contentType) {
-      contentType = await core.media.detectMime({ buffer: result.buffer });
-    }
-
-    const saved = await core.channel.media.saveMediaBuffer(
-      result.buffer,
-      contentType,
-      "inbound",
-      maxBytes,
-    );
-
-    out.push({
-      path: saved.path,
-      contentType: saved.contentType,
-      placeholder: inferPlaceholder(message.msgtype),
-    });
-
-    log?.(`dingtalk: downloaded ${message.msgtype} media, saved to ${saved.path}`);
-  } catch (err) {
-    log?.(`dingtalk: failed to download ${message.msgtype} media: ${String(err)}`);
-  }
-
-  return out;
-}
-
-function buildDingTalkMediaPayload(
-  mediaList: DingTalkMediaInfo[],
-): {
-  MediaPath?: string;
-  MediaType?: string;
-  MediaUrl?: string;
-  MediaPaths?: string[];
-  MediaUrls?: string[];
-  MediaTypes?: string[];
-} {
-  const first = mediaList[0];
-  const mediaPaths = mediaList.map((media) => media.path);
-  const mediaTypes = mediaList.map((media) => media.contentType).filter(Boolean) as string[];
-  return {
-    MediaPath: first?.path,
-    MediaType: first?.contentType,
-    MediaUrl: first?.path,
-    MediaPaths: mediaPaths.length > 0 ? mediaPaths : undefined,
-    MediaUrls: mediaPaths.length > 0 ? mediaPaths : undefined,
-    MediaTypes: mediaTypes.length > 0 ? mediaTypes : undefined,
-  };
-}
+import { safeParseRichText, extractRichTextContent, extractRichTextDownloadCodes } from "./richtext.js";
 
 export function parseDingTalkMessage(message: DingTalkIncomingMessage): DingTalkMessageContext {
   const rawContent = parseMessageContent(message);
@@ -385,6 +225,152 @@ export async function handleDingTalkMessage(params: {
   } catch (err) {
     error(`dingtalk: failed to dispatch message: ${String(err)}`);
   }
+}
+
+// ============ Private Functions ============
+
+function parseMessageContent(message: DingTalkIncomingMessage): string {
+  if (message.msgtype === "text" && message.text?.content) {
+    return message.text.content.trim();
+  }
+  if (message.msgtype === "richText" && message.content) {
+    const parsed = safeParseRichText(message.content);
+    if (parsed) {
+      return extractRichTextContent(parsed);
+    }
+    return typeof message.content === "string" ? message.content : "[富文本消息]";
+  }
+  return describeMediaMessage(message);
+}
+
+function checkBotMentioned(message: DingTalkIncomingMessage): boolean {
+  if (message.isInAtList) return true;
+  if (message.atUsers && message.atUsers.length > 0) return true;
+  return false;
+}
+
+function stripBotMention(text: string): string {
+  return text.replace(/^@\S+\s*/g, "").trim();
+}
+
+function inferPlaceholder(msgtype: string): string {
+  switch (msgtype) {
+    case "image":
+    case "picture":
+      return "<media:image>";
+    case "file":
+      return "<media:document>";
+    case "voice":
+      return "<media:audio>";
+    case "video":
+      return "<media:video>";
+    default:
+      return "<media:document>";
+  }
+}
+
+async function resolveDingTalkMediaList(params: {
+  cfg: ClawdbotConfig;
+  message: DingTalkIncomingMessage;
+  maxBytes: number;
+  log?: (msg: string) => void;
+  client?: DWClient;
+}): Promise<DingTalkMediaInfo[]> {
+  const { cfg, message, maxBytes, log, client } = params;
+
+  // Collect downloadCodes to process
+  const downloadEntries: Array<{ code: string; placeholder: string }> = [];
+
+  if (message.msgtype === "richText" && message.content) {
+    const parsed = safeParseRichText(message.content);
+    if (parsed) {
+      const codes = extractRichTextDownloadCodes(parsed);
+      for (const code of codes) {
+        downloadEntries.push({ code, placeholder: "<media:image>" });
+      }
+    }
+  } else {
+    const mediaTypes = ["image", "picture", "file", "voice", "video"];
+    if (!mediaTypes.includes(message.msgtype)) {
+      return [];
+    }
+    if (!message.downloadCode) {
+      log?.(`dingtalk: no downloadCode for ${message.msgtype} message`);
+      return [];
+    }
+    downloadEntries.push({
+      code: message.downloadCode,
+      placeholder: inferPlaceholder(message.msgtype),
+    });
+  }
+
+  if (downloadEntries.length === 0) {
+    return [];
+  }
+
+  const out: DingTalkMediaInfo[] = [];
+  const core = getDingTalkRuntime();
+
+  for (const entry of downloadEntries) {
+    try {
+      const result = await downloadMediaDingTalk({
+        cfg,
+        downloadCode: entry.code,
+        robotCode: message.robotCode,
+        client,
+      });
+
+      if (!result) {
+        log?.(`dingtalk: failed to download media (code=${entry.code.slice(0, 8)}...)`);
+        continue;
+      }
+
+      const contentType = result.contentType
+        || await core.media.detectMime({ buffer: result.buffer });
+
+      const saved = await core.channel.media.saveMediaBuffer(
+        result.buffer,
+        contentType,
+        "inbound",
+        maxBytes,
+      );
+
+      out.push({
+        path: saved.path,
+        contentType: saved.contentType,
+        placeholder: entry.placeholder,
+      });
+
+      log?.(`dingtalk: downloaded media, saved to ${saved.path}`);
+    } catch (err) {
+      log?.(`dingtalk: failed to download media: ${String(err)}`);
+    }
+  }
+
+  return out;
+}
+
+function buildDingTalkMediaPayload(
+  mediaList: DingTalkMediaInfo[],
+): {
+  MediaPath?: string;
+  MediaType?: string;
+  MediaUrl?: string;
+  MediaPaths?: string[];
+  MediaUrls?: string[];
+  MediaTypes?: string[];
+} {
+  const first = mediaList[0];
+  const mediaPaths = mediaList.map((media) => media.path);
+  const mediaTypes = mediaList.map((media) => media.contentType).filter(Boolean) as string[];
+  return {
+    MediaPath: first?.path,
+    MediaType: first?.contentType,
+    MediaUrl: first?.path,
+    MediaPaths: mediaPaths.length > 0 ? mediaPaths : undefined,
+    MediaUrls: mediaPaths.length > 0 ? mediaPaths : undefined,
+    MediaTypes: mediaTypes.length > 0 ? mediaTypes : undefined,
+  };
 }
 
 function describeMediaMessage(message: DingTalkIncomingMessage): string {

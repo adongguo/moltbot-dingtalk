@@ -175,6 +175,9 @@ export type GatewayOptions = {
   gatewayUrl?: string;
   gatewayPort?: number;
   gatewayAuth?: string;
+  imageBase64?: string;
+  imageContentType?: string;
+  images?: Array<{ base64: string; contentType: string }>;
   log?: {
     info?: (msg: string) => void;
     warn?: (msg: string) => void;
