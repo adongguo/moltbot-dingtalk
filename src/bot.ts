@@ -30,6 +30,14 @@ export function parseDingTalkMessage(message: DingTalkIncomingMessage): DingTalk
   const content = stripBotMention(rawContent);
   const isGroup = message.conversationType === "2";
 
+  // Cache webhook for agent tools (they don't receive webhook in context)
+  if (message.sessionWebhook && message.conversationId) {
+    const expiresAt = message.sessionWebhookExpiredTime
+      ? new Date(message.sessionWebhookExpiredTime).getTime()
+      : undefined;
+    cacheSessionWebhook(message.conversationId, message.sessionWebhook, expiresAt);
+  }
+
   return {
     conversationId: message.conversationId,
     messageId: message.msgId,
@@ -45,14 +53,6 @@ export function parseDingTalkMessage(message: DingTalkIncomingMessage): DingTalk
     chatbotCorpId: message.chatbotCorpId,
     isAdmin: message.isAdmin,
   };
-
-  // Cache webhook for agent tools (they don't receive webhook in context)
-  if (message.sessionWebhook && message.conversationId) {
-    const expiresAt = message.sessionWebhookExpiredTime
-      ? new Date(message.sessionWebhookExpiredTime).getTime()
-      : undefined;
-    cacheSessionWebhook(message.conversationId, message.sessionWebhook, expiresAt);
-  }
 }
 
 export async function handleDingTalkMessage(params: {

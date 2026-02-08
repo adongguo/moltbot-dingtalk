@@ -4,12 +4,13 @@
  * Registers tools that agents can invoke at runtime:
  * - dingtalk_send_card: Send an interactive ActionCard message
  * - dingtalk_list_group_members: List tracked members of a group
- * - dingtalk_mention: Send a message with @mentions
+ * - dingtalk_mention: Send a message with @mentions (supports group via OpenAPI)
  */
 
 import type { ClawdbotPluginApi } from "openclaw/plugin-sdk";
 import { getGroupMembers, getGroupMemberCount, getTrackedGroupIds } from "./group-members.js";
 import { getCachedWebhook } from "./runtime.js";
+import type { DingTalkConfig } from "./types.js";
 
 // ============ Public Functions ============
 
@@ -22,6 +23,10 @@ export function registerDingTalkTools(api: ClawdbotPluginApi): void {
     | undefined;
 
   if (!registerTool) return;
+
+  // Extract DingTalk config for OpenAPI-based tools
+  const config = (api as Record<string, unknown>).config as Record<string, unknown> | undefined;
+  const dingtalkConfig = (config?.channels as Record<string, unknown>)?.dingtalk as DingTalkConfig | undefined;
 
   registerTool({
     name: "dingtalk_send_card",
@@ -91,7 +96,8 @@ export function registerDingTalkTools(api: ClawdbotPluginApi): void {
     name: "dingtalk_mention",
     description:
       "Send a message that @mentions specific users in the current DingTalk group. " +
-      "Use dingtalk_list_group_members first to get user staff IDs.",
+      "Use dingtalk_list_group_members first to get user staff IDs. " +
+      "Supports targeting a specific group via groupId parameter (uses OpenAPI).",
     parameters: {
       type: "object",
       properties: {
@@ -108,11 +114,15 @@ export function registerDingTalkTools(api: ClawdbotPluginApi): void {
           type: "boolean",
           description: "If true, @mention everyone in the group",
         },
+        groupId: {
+          type: "string",
+          description: "Target group conversationId (e.g. cidXXX). When provided, sends via OpenAPI to that group.",
+        },
       },
       required: ["text"],
     },
     execute: async (_toolCallId: string, params: Record<string, unknown>) => {
-      return handleMention(params);
+      return handleMention(params, dingtalkConfig);
     },
   });
 }
@@ -173,7 +183,6 @@ async function handleListGroupMembers(params: Record<string, unknown>): Promise<
     return `Group ${groupId} — ${count} known member(s):\n${members}`;
   }
 
-  // List all tracked groups
   const groupIds = getTrackedGroupIds();
   if (groupIds.length === 0) {
     return "No tracked groups yet. Members are discovered from incoming messages.";
@@ -188,38 +197,70 @@ async function handleListGroupMembers(params: Record<string, unknown>): Promise<
   return lines.join("\n");
 }
 
-async function handleMention(params: Record<string, unknown>): Promise<string> {
-  // SDK may nest params differently; try to extract robustly
+async function handleMention(
+  params: Record<string, unknown>,
+  dingtalkConfig?: DingTalkConfig,
+): Promise<string> {
   const text = (params.text ?? (params as any).command) as string | undefined;
   const rawUserIds = params.userIds;
   const userIds = Array.isArray(rawUserIds) ? rawUserIds as string[] : undefined;
   const atAll = params.atAll === true || params.atAll === "true";
+  const groupId = params.groupId as string | undefined;
 
   if (!text) {
     return "Error: text is required.";
   }
 
+  // Build mention content
+  let content = text;
+  if (atAll) {
+    if (!content.includes("@所有人")) {
+      content = `${content} @所有人`;
+    }
+  } else if (userIds && userIds.length > 0) {
+    const atTexts = userIds.map(id => `@${id}`).join(" ");
+    if (!userIds?.some(id => content.includes(`@${id}`))) {
+      content = `${content} ${atTexts}`;
+    }
+  }
+
+  // Route 1: Target a specific group via OpenAPI
+  if (groupId) {
+    if (!dingtalkConfig) {
+      return "Error: DingTalk config not available. Cannot send via OpenAPI.";
+    }
+    try {
+      const { sendViaOpenAPI } = await import("./openapi-send.js");
+      // OpenAPI group messages use sampleText with @mention in content
+      // Note: OpenAPI doesn't have a separate "at" field; @mentions are text-based
+      await sendViaOpenAPI({
+        config: dingtalkConfig,
+        target: { kind: "group", id: groupId },
+        msgKey: "sampleText",
+        msgParam: { content },
+      });
+
+      const mentionInfo = atAll ? "@所有人" : userIds?.length ? `@${userIds.join(", @")}` : "无@";
+      return `Message sent to group ${groupId} with ${mentionInfo} (via OpenAPI).`;
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      return `Failed to send to group: ${msg}`;
+    }
+  }
+
+  // Route 2: Use cached sessionWebhook (current conversation)
   const sessionWebhook = getCachedWebhook();
   if (!sessionWebhook) {
-    return "Error: no cached sessionWebhook. A DingTalk message must have been received first.";
+    return "Error: no cached sessionWebhook and no groupId specified. Either send a message in the target group first, or provide groupId.";
   }
 
   try {
     const { sendViaWebhook } = await import("./send.js");
 
-    let content = text;
     const atField: Record<string, unknown> = {};
-
     if (atAll) {
-      if (!content.includes("@所有人")) {
-        content = `${content} @所有人`;
-      }
       atField.isAtAll = true;
     } else if (userIds && userIds.length > 0) {
-      const atTexts = userIds.map(id => `@${id}`).join(" ");
-      if (!userIds?.some(id => content.includes(`@${id}`))) {
-        content = `${content} ${atTexts}`;
-      }
       atField.atUserIds = userIds;
       atField.isAtAll = false;
     }
@@ -235,12 +276,7 @@ async function handleMention(params: Record<string, unknown>): Promise<string> {
 
     await sendViaWebhook({ sessionWebhook, message });
 
-    const mentionInfo = atAll 
-      ? "@所有人" 
-      : userIds && userIds.length > 0 
-        ? `@${userIds.join(", @")}` 
-        : "无@";
-    
+    const mentionInfo = atAll ? "@所有人" : userIds?.length ? `@${userIds.join(", @")}` : "无@";
     return `Message sent with ${mentionInfo}.`;
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
