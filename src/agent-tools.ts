@@ -122,7 +122,14 @@ export function registerDingTalkTools(api: ClawdbotPluginApi): void {
       required: ["text"],
     },
     execute: async (_toolCallId: string, params: Record<string, unknown>) => {
-      return handleMention(params, dingtalkConfig);
+      try {
+        const result = await handleMention(params, dingtalkConfig);
+        return result;
+      } catch (err) {
+        const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+        console.error(`[dingtalk][mention] execute error: ${msg}`);
+        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+      }
     },
   });
 }
