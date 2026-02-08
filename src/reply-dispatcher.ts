@@ -176,6 +176,8 @@ export function createDingTalkReplyDispatcher(params: CreateDingTalkReplyDispatc
           renderMode === "card" || (renderMode === "auto" && shouldUseCard(text));
         const useMarkdown = renderMode === "markdown";
 
+        const title = generateTitle(text);
+
         if (useCard) {
           // Card mode: send as ActionCard with markdown rendering (NOT shareable)
           const chunks = core.channel.text.chunkTextWithMode(text, textChunkLimit, chunkMode);
@@ -184,7 +186,7 @@ export function createDingTalkReplyDispatcher(params: CreateDingTalkReplyDispatc
             await sendActionCardDingTalk({
               cfg,
               sessionWebhook,
-              title: "Reply",
+              title,
               text: chunk,
               client,
             });
@@ -197,7 +199,7 @@ export function createDingTalkReplyDispatcher(params: CreateDingTalkReplyDispatc
             await sendMarkdownDingTalk({
               cfg,
               sessionWebhook,
-              title: "Reply",
+              title,
               text: chunk,
               client,
             });
@@ -232,4 +234,30 @@ export function createDingTalkReplyDispatcher(params: CreateDingTalkReplyDispatc
     },
     markDispatchIdle,
   };
+}
+
+// ============ Private Functions ============
+
+const TITLE_MAX_LENGTH = 20;
+
+/**
+ * Generate a dynamic title from message content.
+ * Strips markdown symbols, takes first 20 characters, adds ellipsis if truncated.
+ */
+function generateTitle(text: string): string {
+  const stripped = text
+    .replace(/!\[.*?\]\(.*?\)/g, "")   // remove images ![alt](url)
+    .replace(/\[([^\]]*)\]\(.*?\)/g, "$1") // links → link text
+    .replace(/```[\s\S]*?```/g, "")     // remove fenced code blocks
+    .replace(/`([^`]*)`/g, "$1")        // inline code → content
+    .replace(/#{1,6}\s*/g, "")          // remove heading markers
+    .replace(/[*_~>|\\-]{1,3}/g, "")    // remove emphasis / blockquote / hr markers
+    .replace(/\n+/g, " ")              // collapse newlines
+    .trim();
+
+  if (!stripped) return "Reply";
+
+  return stripped.length > TITLE_MAX_LENGTH
+    ? `${stripped.slice(0, TITLE_MAX_LENGTH)}...`
+    : stripped;
 }

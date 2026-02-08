@@ -189,9 +189,11 @@ async function handleListGroupMembers(params: Record<string, unknown>): Promise<
 }
 
 async function handleMention(params: Record<string, unknown>): Promise<string> {
-  const text = params.text as string | undefined;
-  const userIds = params.userIds as string[] | undefined;
-  const atAll = params.atAll as boolean | undefined;
+  // SDK may nest params differently; try to extract robustly
+  const text = (params.text ?? (params as any).command) as string | undefined;
+  const rawUserIds = params.userIds;
+  const userIds = Array.isArray(rawUserIds) ? rawUserIds as string[] : undefined;
+  const atAll = params.atAll === true || params.atAll === "true";
 
   if (!text) {
     return "Error: text is required.";
@@ -215,7 +217,7 @@ async function handleMention(params: Record<string, unknown>): Promise<string> {
       atField.isAtAll = true;
     } else if (userIds && userIds.length > 0) {
       const atTexts = userIds.map(id => `@${id}`).join(" ");
-      if (!userIds.some(id => content.includes(`@${id}`))) {
+      if (!userIds?.some(id => content.includes(`@${id}`))) {
         content = `${content} ${atTexts}`;
       }
       atField.atUserIds = userIds;
