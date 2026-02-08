@@ -219,9 +219,7 @@ async function handleMention(
     }
   } else if (userIds && userIds.length > 0) {
     const atTexts = userIds.map(id => `@${id}`).join(" ");
-    if (!userIds?.some(id => content.includes(`@${id}`))) {
-      content = `${content} ${atTexts}`;
-    }
+    content = `${content} ${atTexts}`;
   }
 
   // Resolve sessionWebhook: prefer group-specific cache, fallback to any cached
