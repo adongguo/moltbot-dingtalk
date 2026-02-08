@@ -4,19 +4,12 @@
  * Registers tools that agents can invoke at runtime:
  * - dingtalk_send_card: Send an interactive ActionCard message
  * - dingtalk_list_group_members: List tracked members of a group
+ * - dingtalk_mention: Send a message with @mentions
  */
 
 import type { ClawdbotPluginApi } from "openclaw/plugin-sdk";
 import { getGroupMembers, getGroupMemberCount, getTrackedGroupIds } from "./group-members.js";
-
-// ============ Types ============
-
-type ToolRegistration = {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  handler: (params: Record<string, unknown>, ctx: Record<string, unknown>) => Promise<string>;
-};
+import { getCachedWebhook } from "./runtime.js";
 
 // ============ Public Functions ============
 
@@ -25,12 +18,12 @@ type ToolRegistration = {
  */
 export function registerDingTalkTools(api: ClawdbotPluginApi): void {
   const registerTool = (api as Record<string, unknown>).registerTool as
-    | ((tool: ToolRegistration) => void)
+    | ((tool: Record<string, unknown>) => void)
     | undefined;
 
   if (!registerTool) return;
 
-  registerTool.call(api, {
+  registerTool({
     name: "dingtalk_send_card",
     description:
       "Send an interactive ActionCard message to the current DingTalk conversation. " +
@@ -69,10 +62,12 @@ export function registerDingTalkTools(api: ClawdbotPluginApi): void {
       },
       required: ["title", "text"],
     },
-    handler: handleSendCard,
+    execute: async (_toolCallId: string, params: Record<string, unknown>) => {
+      return handleSendCard(params);
+    },
   });
 
-  registerTool.call(api, {
+  registerTool({
     name: "dingtalk_list_group_members",
     description:
       "List tracked members of a DingTalk group. Members are discovered " +
@@ -87,10 +82,12 @@ export function registerDingTalkTools(api: ClawdbotPluginApi): void {
         },
       },
     },
-    handler: handleListGroupMembers,
+    execute: async (_toolCallId: string, params: Record<string, unknown>) => {
+      return handleListGroupMembers(params);
+    },
   });
 
-  registerTool.call(api, {
+  registerTool({
     name: "dingtalk_mention",
     description:
       "Send a message that @mentions specific users in the current DingTalk group. " +
@@ -114,16 +111,15 @@ export function registerDingTalkTools(api: ClawdbotPluginApi): void {
       },
       required: ["text"],
     },
-    handler: handleMention,
+    execute: async (_toolCallId: string, params: Record<string, unknown>) => {
+      return handleMention(params);
+    },
   });
 }
 
 // ============ Private Functions ============
 
-async function handleSendCard(
-  params: Record<string, unknown>,
-  ctx: Record<string, unknown>,
-): Promise<string> {
+async function handleSendCard(params: Record<string, unknown>): Promise<string> {
   const title = params.title as string | undefined;
   const text = params.text as string | undefined;
 
@@ -131,9 +127,9 @@ async function handleSendCard(
     return "Error: title and text are required.";
   }
 
-  const sessionWebhook = ctx.sessionWebhook as string | undefined;
+  const sessionWebhook = getCachedWebhook();
   if (!sessionWebhook) {
-    return "Error: no active sessionWebhook. This tool can only be used in response to a DingTalk message.";
+    return "Error: no cached sessionWebhook. A DingTalk message must have been received first.";
   }
 
   try {
@@ -163,9 +159,7 @@ async function handleSendCard(
   }
 }
 
-async function handleListGroupMembers(
-  params: Record<string, unknown>,
-): Promise<string> {
+async function handleListGroupMembers(params: Record<string, unknown>): Promise<string> {
   const groupId = params.groupId as string | undefined;
 
   if (groupId) {
@@ -194,10 +188,7 @@ async function handleListGroupMembers(
   return lines.join("\n");
 }
 
-async function handleMention(
-  params: Record<string, unknown>,
-  ctx: Record<string, unknown>,
-): Promise<string> {
+async function handleMention(params: Record<string, unknown>): Promise<string> {
   const text = params.text as string | undefined;
   const userIds = params.userIds as string[] | undefined;
   const atAll = params.atAll as boolean | undefined;
@@ -206,28 +197,23 @@ async function handleMention(
     return "Error: text is required.";
   }
 
-  const sessionWebhook = ctx.sessionWebhook as string | undefined;
+  const sessionWebhook = getCachedWebhook();
   if (!sessionWebhook) {
-    return "Error: no active sessionWebhook. This tool can only be used in response to a DingTalk message.";
+    return "Error: no cached sessionWebhook. A DingTalk message must have been received first.";
   }
 
   try {
     const { sendViaWebhook } = await import("./send.js");
 
-    // DingTalk requires BOTH:
-    // 1. @ text in message content
-    // 2. atUserIds in the at field
     let content = text;
     const atField: Record<string, unknown> = {};
 
     if (atAll) {
-      // @所有人 needs the text "@所有人" in content
       if (!content.includes("@所有人")) {
         content = `${content} @所有人`;
       }
       atField.isAtAll = true;
     } else if (userIds && userIds.length > 0) {
-      // Add @userId to content for each user (DingTalk will render as @nickname)
       const atTexts = userIds.map(id => `@${id}`).join(" ");
       if (!userIds.some(id => content.includes(`@${id}`))) {
         content = `${content} ${atTexts}`;

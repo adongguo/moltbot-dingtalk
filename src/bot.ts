@@ -8,7 +8,7 @@ import {
   type HistoryEntry,
 } from "openclaw/plugin-sdk";
 import type { DingTalkConfig, DingTalkMessageContext, DingTalkMediaInfo, DingTalkIncomingMessage } from "./types.js";
-import { getDingTalkRuntime } from "./runtime.js";
+import { getDingTalkRuntime, cacheSessionWebhook } from "./runtime.js";
 import { resolveDingTalkAccountConfig } from "./accounts.js";
 import {
   resolveDingTalkGroupConfig,
@@ -45,6 +45,14 @@ export function parseDingTalkMessage(message: DingTalkIncomingMessage): DingTalk
     chatbotCorpId: message.chatbotCorpId,
     isAdmin: message.isAdmin,
   };
+
+  // Cache webhook for agent tools (they don't receive webhook in context)
+  if (message.sessionWebhook && message.conversationId) {
+    const expiresAt = message.sessionWebhookExpiredTime
+      ? new Date(message.sessionWebhookExpiredTime).getTime()
+      : undefined;
+    cacheSessionWebhook(message.conversationId, message.sessionWebhook, expiresAt);
+  }
 }
 
 export async function handleDingTalkMessage(params: {
