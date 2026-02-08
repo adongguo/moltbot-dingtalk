@@ -68,7 +68,8 @@ export function registerDingTalkTools(api: ClawdbotPluginApi): void {
       required: ["title", "text"],
     },
     execute: async (_toolCallId: string, params: Record<string, unknown>) => {
-      return handleSendCard(params);
+      const result = await handleSendCard(params);
+      return { content: [{ type: "text", text: result }] };
     },
   });
 
@@ -88,7 +89,8 @@ export function registerDingTalkTools(api: ClawdbotPluginApi): void {
       },
     },
     execute: async (_toolCallId: string, params: Record<string, unknown>) => {
-      return handleListGroupMembers(params);
+      const result = await handleListGroupMembers(params);
+      return { content: [{ type: "text", text: result }] };
     },
   });
 
@@ -124,11 +126,11 @@ export function registerDingTalkTools(api: ClawdbotPluginApi): void {
     execute: async (_toolCallId: string, params: Record<string, unknown>) => {
       try {
         const result = await handleMention(params, dingtalkConfig);
-        return result;
+        return { content: [{ type: "text", text: result }] };
       } catch (err) {
-        const msg = err instanceof Error ? `${err.message}\n${err.stack}` : String(err);
+        const msg = err instanceof Error ? err.message : String(err);
         console.error(`[dingtalk][mention] execute error: ${msg}`);
-        return `Error: ${err instanceof Error ? err.message : String(err)}`;
+        return { content: [{ type: "text", text: `Error: ${msg}` }] };
       }
     },
   });
