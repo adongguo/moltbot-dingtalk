@@ -35,7 +35,7 @@ export function parseDingTalkMessage(message: DingTalkIncomingMessage): DingTalk
     const expiresAt = message.sessionWebhookExpiredTime
       ? new Date(message.sessionWebhookExpiredTime).getTime()
       : undefined;
-    cacheSessionWebhook(message.conversationId, message.sessionWebhook, expiresAt);
+    cacheSessionWebhook(message.conversationId, message.sessionWebhook, expiresAt, message.senderStaffId);
   }
 
   return {

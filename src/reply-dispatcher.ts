@@ -17,6 +17,7 @@ import {
   type TypingIndicatorState,
 } from "./typing.js";
 import { processLocalImages, processFileMarkers, getOapiAccessToken } from "./media.js";
+import { resolveWebhook, getLatestWebhookForSender } from "./runtime.js";
 
 /**
  * Detect if text contains markdown elements that benefit from card rendering.
@@ -46,7 +47,12 @@ export type CreateDingTalkReplyDispatcherParams = {
 
 export function createDingTalkReplyDispatcher(params: CreateDingTalkReplyDispatcherParams) {
   const core = getDingTalkRuntime();
-  const { cfg, agentId, conversationId, sessionWebhook, client } = params;
+  const { cfg, agentId, client } = params;
+  // These are the INITIAL values from the triggering message.
+  // For DMs, the actual webhook/conversationId may change if the user
+  // sends from a different client before the agent replies.
+  const initialConversationId = params.conversationId;
+  const initialSessionWebhook = params.sessionWebhook;
 
   const prefixContext = createReplyPrefixContext({
     cfg,
@@ -64,7 +70,12 @@ export function createDingTalkReplyDispatcher(params: CreateDingTalkReplyDispatc
     start: async () => {
       // DingTalk typing indicator is optional and may not work for all bots
       try {
-        typingState = await addTypingIndicator({ cfg, sessionWebhook });
+        // Resolve latest webhook for typing indicator too
+        const latestWebhook = resolveWebhook({
+          conversationId: initialConversationId,
+          senderId: params.conversationType !== "2" ? params.senderId : undefined,
+        }) ?? initialSessionWebhook;
+        typingState = await addTypingIndicator({ cfg, sessionWebhook: latestWebhook });
         params.runtime.log?.(`dingtalk: added typing indicator`);
       } catch {
         // Typing indicator not available, ignore
@@ -116,6 +127,19 @@ export function createDingTalkReplyDispatcher(params: CreateDingTalkReplyDispatc
       humanDelay: core.channel.reply.resolveHumanDelayConfig(cfg, agentId),
       onReplyStart: typingCallbacks.onReplyStart,
       deliver: async (payload: ReplyPayload) => {
+        // Dynamically resolve the latest webhook for this sender/conversation.
+        // This handles the case where the same user DMs from different clients
+        // (each producing a different conversationId/webhook).
+        const isGroup = params.conversationType === "2";
+        const resolved = resolveWebhook({
+          conversationId: initialConversationId,
+          senderId: isGroup ? undefined : params.senderId,
+        });
+        const sessionWebhook = resolved ?? initialSessionWebhook;
+        const conversationId = isGroup
+          ? initialConversationId
+          : (getLatestWebhookForSender(params.senderId ?? "")?.conversationId ?? initialConversationId);
+
         params.runtime.log?.(`dingtalk deliver called: text=${payload.text?.slice(0, 100)}`);
         let text = payload.text ?? "";
         if (!text.trim()) {
