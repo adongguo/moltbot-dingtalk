@@ -357,6 +357,13 @@ function startConnectionHealthCheck(
       disconnectedSince = null;
     } catch (err) {
       logger.error(`dingtalk: reconnect attempt #${reconnectAttempts} failed: ${String(err)}`);
+
+      // If soft reconnect keeps failing, escalate to hard reconnect sooner
+      // by bumping attempts to force hard reconnect on next try
+      if (!useHardReconnect && reconnectAttempts >= MAX_SOFT_RECONNECT_ATTEMPTS) {
+        logger.log("dingtalk: escalating to hard reconnect on next attempt");
+      }
+
       // Reset disconnectedSince so the next attempt respects the new backoff
       disconnectedSince = Date.now();
     } finally {
@@ -367,6 +374,13 @@ function startConnectionHealthCheck(
 
 async function softReconnect(client: DWClient): Promise<void> {
   cleanupClientInternalState(client);
+
+  // Reset userDisconnect so SDK allows reconnection
+  (client as unknown as Record<string, unknown>).userDisconnect = false;
+
+  // Reset subscriptions to prevent accumulation across soft reconnects
+  // (same fix as hard reconnect — SDK bug with shared defaultConfig.subscriptions)
+  client.config.subscriptions = [{ type: "EVENT", topic: "*" }];
 
   await raceWithTimeout(client.connect(), 30_000, "connect timeout");
 
@@ -380,9 +394,10 @@ async function hardReconnect(
   ctx: ReconnectContext,
   logger: { log: (msg: string) => void; error: (msg: string) => void },
 ): Promise<void> {
-  // Tear down old client completely.
+  // Tear down old client completely, including token cache.
   // clearClientCache disconnects internally, so no separate disconnect needed.
   // Use resolved ID to avoid clearing ALL accounts when accountId is undefined.
+  // This also ensures stale access tokens are purged after network outage.
   clearClientCache(ctx.accountId ?? DEFAULT_ACCOUNT_ID);
 
   // Create a completely fresh client with new WebSocket session.
